@@ -1,24 +1,52 @@
 interface LooperSettings {
   looperKey: string;
-  doubleTapWindow: number;
   latencyCompensation: number;
   epsilon: number;
   enableHoldToDefine: boolean;
   edgeBleed: number;
   metronomeEnabled: boolean;
   clicksPerLoop: number;
+  keyBindings: {
+    setPointA: string;
+    setPointB: string;
+    stopLoop: string;
+    speedUp: string;
+    speedDown: string;
+    pitchUp: string;
+    pitchDown: string;
+    resetPitch: string;
+    toggleMetronome: string;
+    jogABack: string;
+    jogAForward: string;
+    jogBBack: string;
+    jogBForward: string;
+  };
 }
 
 class OptionsManager {
   private defaultSettings: LooperSettings = {
     looperKey: 'BracketLeft',
-    doubleTapWindow: 1200,
     latencyCompensation: 50,
     epsilon: 50,
     enableHoldToDefine: false,
     edgeBleed: 100,
     metronomeEnabled: false,
-    clicksPerLoop: 4
+    clicksPerLoop: 4,
+    keyBindings: {
+      setPointA: 'BracketLeft',
+      setPointB: 'BracketRight', 
+      stopLoop: 'Backslash',
+      speedUp: 'Equal',
+      speedDown: 'Minus',
+      pitchUp: 'ArrowUp',
+      pitchDown: 'ArrowDown',
+      resetPitch: 'KeyR',
+      toggleMetronome: 'KeyM',
+      jogABack: 'Comma',
+      jogAForward: 'Period',
+      jogBBack: 'Semicolon',
+      jogBForward: 'Quote'
+    }
   };
 
   private saveTimeout: number | null = null;
@@ -51,6 +79,21 @@ class OptionsManager {
     (form.elements.namedItem('edgeBleed') as HTMLInputElement).value = settings.edgeBleed.toString();
     (form.elements.namedItem('metronomeEnabled') as HTMLInputElement).checked = settings.metronomeEnabled;
     (form.elements.namedItem('clicksPerLoop') as HTMLInputElement).value = settings.clicksPerLoop.toString();
+    
+    // Populate key bindings
+    (form.elements.namedItem('setPointA') as HTMLInputElement).value = settings.keyBindings.setPointA;
+    (form.elements.namedItem('setPointB') as HTMLInputElement).value = settings.keyBindings.setPointB;
+    (form.elements.namedItem('stopLoop') as HTMLInputElement).value = settings.keyBindings.stopLoop;
+    (form.elements.namedItem('speedUp') as HTMLInputElement).value = settings.keyBindings.speedUp;
+    (form.elements.namedItem('speedDown') as HTMLInputElement).value = settings.keyBindings.speedDown;
+    (form.elements.namedItem('pitchUp') as HTMLInputElement).value = settings.keyBindings.pitchUp;
+    (form.elements.namedItem('pitchDown') as HTMLInputElement).value = settings.keyBindings.pitchDown;
+    (form.elements.namedItem('resetPitch') as HTMLInputElement).value = settings.keyBindings.resetPitch;
+    (form.elements.namedItem('toggleMetronome') as HTMLInputElement).value = settings.keyBindings.toggleMetronome;
+    (form.elements.namedItem('jogABack') as HTMLInputElement).value = settings.keyBindings.jogABack;
+    (form.elements.namedItem('jogAForward') as HTMLInputElement).value = settings.keyBindings.jogAForward;
+    (form.elements.namedItem('jogBBack') as HTMLInputElement).value = settings.keyBindings.jogBBack;
+    (form.elements.namedItem('jogBForward') as HTMLInputElement).value = settings.keyBindings.jogBForward;
   }
 
   private setupEventListeners(): void {
@@ -92,14 +135,28 @@ class OptionsManager {
     const form = document.getElementById('settingsForm') as HTMLFormElement;
     
     const settings: LooperSettings = {
-      looperKey: 'BracketLeft', // Fixed
-      doubleTapWindow: 1200, // Not used
+      looperKey: 'BracketLeft', // Legacy - not used
       latencyCompensation: parseInt((form.elements.namedItem('latencyCompensation') as HTMLInputElement).value, 10),
       epsilon: parseInt((form.elements.namedItem('epsilon') as HTMLInputElement).value, 10),
       enableHoldToDefine: false, // Fixed
       edgeBleed: parseInt((form.elements.namedItem('edgeBleed') as HTMLInputElement).value, 10),
       metronomeEnabled: (form.elements.namedItem('metronomeEnabled') as HTMLInputElement).checked,
-      clicksPerLoop: parseInt((form.elements.namedItem('clicksPerLoop') as HTMLInputElement).value, 10)
+      clicksPerLoop: parseInt((form.elements.namedItem('clicksPerLoop') as HTMLInputElement).value, 10),
+      keyBindings: {
+        setPointA: (form.elements.namedItem('setPointA') as HTMLInputElement).value || 'BracketLeft',
+        setPointB: (form.elements.namedItem('setPointB') as HTMLInputElement).value || 'BracketRight',
+        stopLoop: (form.elements.namedItem('stopLoop') as HTMLInputElement).value || 'Backslash',
+        speedUp: (form.elements.namedItem('speedUp') as HTMLInputElement).value || 'Equal',
+        speedDown: (form.elements.namedItem('speedDown') as HTMLInputElement).value || 'Minus',
+        pitchUp: (form.elements.namedItem('pitchUp') as HTMLInputElement).value || 'ArrowUp',
+        pitchDown: (form.elements.namedItem('pitchDown') as HTMLInputElement).value || 'ArrowDown',
+        resetPitch: (form.elements.namedItem('resetPitch') as HTMLInputElement).value || 'KeyR',
+        toggleMetronome: (form.elements.namedItem('toggleMetronome') as HTMLInputElement).value || 'KeyM',
+        jogABack: (form.elements.namedItem('jogABack') as HTMLInputElement).value || 'Comma',
+        jogAForward: (form.elements.namedItem('jogAForward') as HTMLInputElement).value || 'Period',
+        jogBBack: (form.elements.namedItem('jogBBack') as HTMLInputElement).value || 'Semicolon',
+        jogBForward: (form.elements.namedItem('jogBForward') as HTMLInputElement).value || 'Quote'
+      }
     };
 
     // Validate settings

@@ -1,12 +1,26 @@
 interface LooperSettings {
   looperKey: string;
-  doubleTapWindow: number;
   latencyCompensation: number;
   epsilon: number;
   enableHoldToDefine: boolean;
   edgeBleed: number;
   metronomeEnabled: boolean;
   clicksPerLoop: number;
+  keyBindings: {
+    setPointA: string;
+    setPointB: string;
+    stopLoop: string;
+    speedUp: string;
+    speedDown: string;
+    pitchUp: string;
+    pitchDown: string;
+    resetPitch: string;
+    toggleMetronome: string;
+    jogABack: string;
+    jogAForward: string;
+    jogBBack: string;
+    jogBForward: string;
+  };
 }
 
 interface LooperState {
@@ -31,14 +45,28 @@ interface LooperState {
 
 class PunchLooper {
   private settings: LooperSettings = {
-    looperKey: 'BracketLeft', // Not used anymore
-    doubleTapWindow: 1200,
+    looperKey: 'BracketLeft', // Legacy - not used anymore
     latencyCompensation: 50,
     epsilon: 50,
     enableHoldToDefine: false,
     edgeBleed: 100,
     metronomeEnabled: false,
-    clicksPerLoop: 4
+    clicksPerLoop: 4,
+    keyBindings: {
+      setPointA: 'BracketLeft',
+      setPointB: 'BracketRight', 
+      stopLoop: 'Backslash',
+      speedUp: 'Equal',
+      speedDown: 'Minus',
+      pitchUp: 'ArrowUp',
+      pitchDown: 'ArrowDown',
+      resetPitch: 'KeyR',
+      toggleMetronome: 'KeyM',
+      jogABack: 'Comma',
+      jogAForward: 'Period',
+      jogBBack: 'Semicolon',
+      jogBForward: 'Quote'
+    }
   };
 
   private state: LooperState = {
@@ -221,14 +249,14 @@ class PunchLooper {
 
     console.log('Processing key:', event.code);
     
-    if (event.code === 'BracketLeft') {
-      console.log('BracketLeft detected - setting point A');
+    if (event.code === this.settings.keyBindings.setPointA) {
+      console.log('Set Point A key detected');
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
       this.setPointA();
-    } else if (event.code === 'BracketRight') {
-      console.log('BracketRight detected - setting point B');
+    } else if (event.code === this.settings.keyBindings.setPointB) {
+      console.log('Set Point B key detected');
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
@@ -236,72 +264,72 @@ class PunchLooper {
       if (this.state.pointA !== null && this.state.pointB !== null) {
         this.startLoop();
       }
-    } else if (event.code === 'Backslash') {
-      console.log('Backslash detected - stopping loop');
+    } else if (event.code === this.settings.keyBindings.stopLoop) {
+      console.log('Stop loop key detected');
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
       if (this.state.isLooping) {
-        this.stopLoop();
+        this.resetLoop();
       } else {
-        console.log('Not looping, ignoring backslash');
+        console.log('Not looping, ignoring stop key');
       }
-    } else if (event.code === 'Equal' && event.shiftKey) {
-      // Shift + = (plus key) - increase speed
+    } else if (event.code === this.settings.keyBindings.speedUp && event.shiftKey) {
+      // Shift + speed up key - increase speed
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
       this.adjustPlaybackRate(0.05);
-    } else if (event.code === 'Minus' && event.shiftKey) {
-      // Shift + - (minus key) - decrease speed
+    } else if (event.code === this.settings.keyBindings.speedDown && event.shiftKey) {
+      // Shift + speed down key - decrease speed
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
       this.adjustPlaybackRate(-0.05);
-    } else if (event.code === 'KeyM' && event.shiftKey) {
+    } else if (event.code === this.settings.keyBindings.toggleMetronome && event.shiftKey) {
       // Shift + M - toggle metronome
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
       this.toggleMetronome();
-    } else if (event.code === 'ArrowUp' && event.shiftKey) {
-      // Shift + Up Arrow - pitch up half step
+    } else if (event.code === this.settings.keyBindings.pitchUp && event.shiftKey) {
+      // Shift + pitch up key - pitch up half step
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
       this.adjustPitch(0.5);
-    } else if (event.code === 'ArrowDown' && event.shiftKey) {
-      // Shift + Down Arrow - pitch down half step
+    } else if (event.code === this.settings.keyBindings.pitchDown && event.shiftKey) {
+      // Shift + pitch down key - pitch down half step
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
       this.adjustPitch(-0.5);
-    } else if (event.code === 'KeyR' && event.shiftKey) {
-      // Shift + R - reset pitch and speed
+    } else if (event.code === this.settings.keyBindings.resetPitch && event.shiftKey) {
+      // Shift + reset key - reset pitch and speed
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
       this.resetPlaybackSettings();
-    } else if (event.code === 'Comma' && event.shiftKey) {
-      // Shift + < - move point A back
+    } else if (event.code === this.settings.keyBindings.jogABack && event.shiftKey) {
+      // Shift + jog A back key - move point A back
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
       this.adjustLoopEdge('A', 'back');
-    } else if (event.code === 'Period' && event.shiftKey) {
+    } else if (event.code === this.settings.keyBindings.jogAForward && event.shiftKey) {
       // Shift + > - move point A forward  
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
       this.adjustLoopEdge('A', 'forward');
-    } else if (event.code === 'Semicolon' && event.shiftKey) {
-      // Shift + : - move point B back
+    } else if (event.code === this.settings.keyBindings.jogBBack && event.shiftKey) {
+      // Shift + jog B back key - move point B back
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
       this.adjustLoopEdge('B', 'back');
-    } else if (event.code === 'Quote' && event.shiftKey) {
-      // Shift + " - move point B forward
+    } else if (event.code === this.settings.keyBindings.jogBForward && event.shiftKey) {
+      // Shift + jog B forward key - move point B forward
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
@@ -528,7 +556,12 @@ class PunchLooper {
     this.state.activeMedia.playbackRate = 1.0;
     this.setPitchPreservation(false);
     
-    this.showHUD('Pitch reset to original', 700);
+    this.showHUD('Pitch/tempo reset to original', 700);
+    
+    // Update both knob positions to center (reset position)
+    this.updateKnobRotation('pitch');
+    this.updateKnobRotation('speed');
+    this.updateGUILEDs();
   }
 
   private toggleMetronome(): void {
@@ -768,17 +801,6 @@ class PunchLooper {
         <p style="color: #999; font-size: 12px; margin: 8px 0 0 0;">Overlap before A and after B for smoother loops.</p>
       </div>
 
-      <div style="margin-bottom: 16px;">
-        <label style="display: block; margin-bottom: 8px; color: #ccc; font-size: 14px;">Double Tap Window (ms)</label>
-        <input type="range" id="doubletap-slider" min="500" max="2000" value="${this.settings.doubleTapWindow}" 
-               style="width: 100%; margin-bottom: 8px;">
-        <div style="display: flex; justify-content: space-between; color: #888; font-size: 12px;">
-          <span>500ms</span>
-          <span id="doubletap-value">${this.settings.doubleTapWindow}ms</span>
-          <span>2000ms</span>
-        </div>
-        <p style="color: #999; font-size: 12px; margin: 8px 0 0 0;">Time window for double-tap to reset loop.</p>
-      </div>
 
       <div style="display: flex; gap: 12px; margin-top: 24px;">
         <button id="reset-settings" style="flex: 1; padding: 10px; background: #444; color: white; border: none; border-radius: 6px; cursor: pointer;">Reset Defaults</button>
@@ -794,8 +816,6 @@ class PunchLooper {
     const latencyValue = modal.querySelector('#latency-value') as HTMLElement;
     const bleedSlider = modal.querySelector('#bleed-slider') as HTMLInputElement;
     const bleedValue = modal.querySelector('#bleed-value') as HTMLElement;
-    const doubletapSlider = modal.querySelector('#doubletap-slider') as HTMLInputElement;
-    const doubletapValue = modal.querySelector('#doubletap-value') as HTMLElement;
 
     latencySlider.addEventListener('input', () => {
       latencyValue.textContent = `${latencySlider.value}ms`;
@@ -803,10 +823,6 @@ class PunchLooper {
 
     bleedSlider.addEventListener('input', () => {
       bleedValue.textContent = `${bleedSlider.value}ms`;
-    });
-
-    doubletapSlider.addEventListener('input', () => {
-      doubletapValue.textContent = `${doubletapSlider.value}ms`;
     });
 
     // Close modal
@@ -823,23 +839,19 @@ class PunchLooper {
     modal.querySelector('#reset-settings')?.addEventListener('click', () => {
       latencySlider.value = '50';
       bleedSlider.value = '100';
-      doubletapSlider.value = '1200';
       latencyValue.textContent = '50ms';
       bleedValue.textContent = '100ms';
-      doubletapValue.textContent = '1200ms';
     });
 
     // Save settings
     modal.querySelector('#save-settings')?.addEventListener('click', async () => {
       this.settings.latencyCompensation = parseInt(latencySlider.value);
       this.settings.edgeBleed = parseInt(bleedSlider.value);
-      this.settings.doubleTapWindow = parseInt(doubletapSlider.value);
 
       try {
         await chrome.storage.sync.set({
           latencyCompensation: this.settings.latencyCompensation,
-          edgeBleed: this.settings.edgeBleed,
-          doubleTapWindow: this.settings.doubleTapWindow
+          edgeBleed: this.settings.edgeBleed
         });
         this.showHUD('Settings saved!', 1000);
         closeModal();
@@ -886,7 +898,7 @@ class PunchLooper {
 
   private createPedalSVG(): string {
     return `
-      <svg viewBox="0 0 200 280" xmlns="http://www.w3.org/2000/svg" style="width: 100%; height: 100%; filter: drop-shadow(0 12px 24px rgba(0,0,0,0.4));">
+      <svg viewBox="0 0 170 280" xmlns="http://www.w3.org/2000/svg" style="width: 100%; height: 100%; filter: drop-shadow(0 12px 24px rgba(0,0,0,0.4));">
         <!-- Boss RC-1 Style Compact Design -->
         <defs>
           <!-- Red pedal gradient -->
@@ -926,27 +938,27 @@ class PunchLooper {
         </defs>
         
         <!-- Main pedal body - Red and square -->
-        <rect x="10" y="20" width="180" height="240" rx="8" ry="8" 
+        <rect x="10" y="20" width="150" height="240" rx="8" ry="8" 
               fill="url(#redPedal)" 
               stroke="#990000" stroke-width="2"/>
               
         <!-- Top section with Boss branding -->
-        <rect x="20" y="30" width="160" height="40" rx="4" ry="4" 
+        <rect x="20" y="30" width="130" height="40" rx="4" ry="4" 
               fill="#111" 
               stroke="#333" stroke-width="1"/>
         
         <!-- YTLOOPER branding -->
-        <text x="100" y="50" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold" font-family="Arial Black">YTLOOPER</text>
-        <text x="100" y="62" text-anchor="middle" fill="#aaa" font-size="8">Musical Loop Station</text>
+        <text x="85" y="50" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold" font-family="Arial Black">YTLOOPER</text>
+        <text x="85" y="62" text-anchor="middle" fill="#aaa" font-size="8">Musical Loop Station</text>
         
         <!-- Input jacks -->
         <circle cx="30" cy="45" r="4" fill="#333" stroke="#666" stroke-width="1"/>
         <circle cx="30" cy="45" r="2" fill="#000"/>
         <text x="30" y="60" text-anchor="middle" fill="#888" font-size="6">IN 1</text>
         
-        <circle cx="170" cy="45" r="4" fill="#333" stroke="#666" stroke-width="1"/>
-        <circle cx="170" cy="45" r="2" fill="#000"/>
-        <text x="170" y="60" text-anchor="middle" fill="#888" font-size="6">IN 2</text>
+        <circle cx="140" cy="45" r="4" fill="#333" stroke="#666" stroke-width="1"/>
+        <circle cx="140" cy="45" r="2" fill="#000"/>
+        <text x="140" y="60" text-anchor="middle" fill="#888" font-size="6">IN 2</text>
         
         <!-- Status LEDs horizontally below knobs -->
         <circle cx="30" cy="145" r="4" fill="${this.state.pointA ? 'url(#greenLED)' : '#002200'}" class="led-a" stroke="#333" stroke-width="1"/>
@@ -1011,30 +1023,39 @@ class PunchLooper {
           <text x="136" y="118" text-anchor="middle" fill="#aaa" font-size="8">&gt;</text>
         </g>
         
-        <!-- Settings gear (compact placement) -->
-        <g id="settings-gear" style="cursor: pointer;" class="settings-gear">
-          <circle cx="170" cy="40" r="8" fill="#444" stroke="#666" stroke-width="1"/>
-          <circle cx="170" cy="40" r="4" fill="#666"/>
-          <text x="170" y="55" text-anchor="middle" fill="#aaa" font-size="6">SET</text>
+        <!-- Reset button (above and between knobs) -->
+        <g id="reset-button" style="cursor: pointer;" class="reset-button">
+          <circle cx="60" cy="85" r="6" fill="#333" stroke="#666" stroke-width="1"/>
+          <text x="60" y="89" text-anchor="middle" fill="#ccc" font-size="8" font-weight="bold">R</text>
+          <text x="60" y="97" text-anchor="middle" fill="#888" font-size="5">RST</text>
         </g>
         
-        <!-- Current settings display -->
-        <text x="140" y="130" text-anchor="middle" fill="#ccc" font-size="8" font-weight="bold">${this.getCurrentPlaybackRate()}x</text>
-        <text x="140" y="140" text-anchor="middle" fill="#888" font-size="6">${this.getCurrentIntervalName()}</text>
+        <!-- Settings hamburger menu (aligned with LED lights) -->
+        <g id="settings-gear" style="cursor: pointer;" class="settings-gear">
+          <rect x="127" y="139" width="16" height="12" rx="2" fill="#555" stroke="#888" stroke-width="1"/>
+          <line x1="130" y1="142" x2="140" y2="142" stroke="#ccc" stroke-width="1"/>
+          <line x1="130" y1="145" x2="140" y2="145" stroke="#ccc" stroke-width="1"/>
+          <line x1="130" y1="148" x2="140" y2="148" stroke="#ccc" stroke-width="1"/>
+          <text x="135" y="157" text-anchor="middle" fill="#ccc" font-size="5">MENU</text>
+        </g>
         
-        <!-- Large black square footswitch with REC/PLAY label -->
+        <!-- Current settings display (moved to center) -->
+        <text x="85" y="165" text-anchor="middle" fill="#ccc" font-size="8" font-weight="bold">${this.getCurrentPlaybackRate()}x</text>
+        <text x="85" y="175" text-anchor="middle" fill="#888" font-size="6">${this.getCurrentIntervalName()}</text>
+        
+        <!-- Large black full-width footswitch with REC/PLAY label -->
         <g id="footswitch" style="cursor: pointer;" class="footswitch">
-          <rect x="50" y="190" width="100" height="60" rx="4" ry="4" fill="#000" stroke="#333" stroke-width="2"/>
-          <rect x="55" y="195" width="90" height="50" rx="2" ry="2" fill="#111" stroke="#222" stroke-width="1"/>
+          <rect x="20" y="190" width="130" height="60" rx="4" ry="4" fill="#000" stroke="#333" stroke-width="2"/>
+          <rect x="25" y="195" width="120" height="50" rx="2" ry="2" fill="#111" stroke="#222" stroke-width="1"/>
           <!-- Subtle texture on footswitch -->
-          <rect x="60" y="200" width="80" height="40" rx="2" ry="2" fill="#222"/>
+          <rect x="30" y="200" width="110" height="40" rx="2" ry="2" fill="#222"/>
           <!-- REC/PLAY label on footswitch -->
-          <text x="100" y="218" text-anchor="middle" fill="#ccc" font-size="8" font-weight="bold">REC</text>
-          <text x="100" y="230" text-anchor="middle" fill="#ccc" font-size="8" font-weight="bold">PLAY</text>
+          <text x="85" y="218" text-anchor="middle" fill="#ccc" font-size="10" font-weight="bold">REC</text>
+          <text x="85" y="232" text-anchor="middle" fill="#ccc" font-size="10" font-weight="bold">PLAY</text>
         </g>
         
         <!-- Bottom label -->
-        <text x="100" y="275" text-anchor="middle" fill="#666" font-size="8" font-weight="bold">YTLOOPER</text>
+        <text x="85" y="275" text-anchor="middle" fill="#666" font-size="8" font-weight="bold">YTLOOPER</text>
       </svg>
     `;
   }
@@ -1074,6 +1095,16 @@ class PunchLooper {
         e.preventDefault();
         e.stopPropagation();
         this.showSettingsModal();
+      });
+    }
+
+    // Reset button
+    const resetButton = gui.querySelector('#reset-button');
+    if (resetButton) {
+      resetButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.resetPlaybackSettings();
       });
     }
 
@@ -1148,14 +1179,13 @@ class PunchLooper {
     this.state.lastTapTime = currentTime;
 
     if (this.state.isLooping) {
-      // Stop loop
-      this.stopLoop();
-      this.updateGUILEDs();
+      // Stop loop and reset points
+      this.resetLoop();
     } else if (this.state.pointA === null) {
       // Set point A
       this.setPointA();
       this.updateGUILEDs();
-    } else if (this.state.pointB === null || timeSinceLastTap > this.settings.doubleTapWindow) {
+    } else if (this.state.pointB === null || timeSinceLastTap > 1200) {
       // Set point B and start loop
       this.setPointB();
       if (this.state.pointA !== null && this.state.pointB !== null) {

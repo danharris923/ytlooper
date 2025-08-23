@@ -66,46 +66,73 @@
         </section>
 
         <section class="setting-group">
-          <h2>Keyboard Shortcuts</h2>
-          <div class="shortcuts">
-            <div class="shortcut">
-              <kbd>[</kbd> <span>Set point A (punch in)</span>
+          <h2>Key Bindings</h2>
+          <p class="setting-help">Customize keyboard shortcuts. Use Shift+ for modified keys.</p>
+          
+          <div class="key-bindings">
+            <div class="setting">
+              <label for="setPointA">Set Point A:</label>
+              <input type="text" id="setPointA" name="setPointA" placeholder="BracketLeft">
             </div>
-            <div class="shortcut">
-              <kbd>]</kbd> <span>Set point B (punch out) and start looping</span>
+            
+            <div class="setting">
+              <label for="setPointB">Set Point B:</label>
+              <input type="text" id="setPointB" name="setPointB" placeholder="BracketRight">
             </div>
-            <div class="shortcut">
-              <kbd>\</kbd> <span>Stop loop</span>
+            
+            <div class="setting">
+              <label for="stopLoop">Stop Loop:</label>
+              <input type="text" id="stopLoop" name="stopLoop" placeholder="Backslash">
             </div>
-            <div class="shortcut">
-              <kbd>Shift</kbd> + <kbd>+</kbd> <span>Increase speed 5%</span>
+            
+            <div class="setting">
+              <label for="speedUp">Speed Up (Shift+):</label>
+              <input type="text" id="speedUp" name="speedUp" placeholder="Equal">
             </div>
-            <div class="shortcut">
-              <kbd>Shift</kbd> + <kbd>-</kbd> <span>Decrease speed 5%</span>
+            
+            <div class="setting">
+              <label for="speedDown">Speed Down (Shift+):</label>
+              <input type="text" id="speedDown" name="speedDown" placeholder="Minus">
             </div>
-            <div class="shortcut">
-              <kbd>Shift</kbd> + <kbd>↑</kbd> <span>Pitch up ½ step</span>
+            
+            <div class="setting">
+              <label for="pitchUp">Pitch Up (Shift+):</label>
+              <input type="text" id="pitchUp" name="pitchUp" placeholder="ArrowUp">
             </div>
-            <div class="shortcut">
-              <kbd>Shift</kbd> + <kbd>↓</kbd> <span>Pitch down ½ step</span>
+            
+            <div class="setting">
+              <label for="pitchDown">Pitch Down (Shift+):</label>
+              <input type="text" id="pitchDown" name="pitchDown" placeholder="ArrowDown">
             </div>
-            <div class="shortcut">
-              <kbd>Shift</kbd> + <kbd>R</kbd> <span>Reset speed & pitch</span>
+            
+            <div class="setting">
+              <label for="resetPitch">Reset Pitch/Speed (Shift+):</label>
+              <input type="text" id="resetPitch" name="resetPitch" placeholder="KeyR">
             </div>
-            <div class="shortcut">
-              <kbd>Shift</kbd> + <kbd>M</kbd> <span>Toggle metronome</span>
+            
+            <div class="setting">
+              <label for="toggleMetronome">Toggle Metronome (Shift+):</label>
+              <input type="text" id="toggleMetronome" name="toggleMetronome" placeholder="KeyM">
             </div>
-            <div class="shortcut">
-              <kbd>Shift</kbd> + <kbd>&lt;</kbd> <span>Move point A back 0.05s</span>
+            
+            <div class="setting">
+              <label for="jogABack">Jog A Back (Shift+):</label>
+              <input type="text" id="jogABack" name="jogABack" placeholder="Comma">
             </div>
-            <div class="shortcut">
-              <kbd>Shift</kbd> + <kbd>&gt;</kbd> <span>Move point A forward 0.05s</span>
+            
+            <div class="setting">
+              <label for="jogAForward">Jog A Forward (Shift+):</label>
+              <input type="text" id="jogAForward" name="jogAForward" placeholder="Period">
             </div>
-            <div class="shortcut">
-              <kbd>Shift</kbd> + <kbd>:</kbd> <span>Move point B back 0.05s</span>
+            
+            <div class="setting">
+              <label for="jogBBack">Jog B Back (Shift+):</label>
+              <input type="text" id="jogBBack" name="jogBBack" placeholder="Semicolon">
             </div>
-            <div class="shortcut">
-              <kbd>Shift</kbd> + <kbd>"</kbd> <span>Move point B forward 0.05s</span>
+            
+            <div class="setting">
+              <label for="jogBForward">Jog B Forward (Shift+):</label>
+              <input type="text" id="jogBForward" name="jogBForward" placeholder="Quote">
             </div>
           </div>
         </section>
