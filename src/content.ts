@@ -306,13 +306,13 @@ class PunchLooper {
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      this.adjustPlaybackRate(0.05);
+      this.adjustPlaybackRate(0.01); // Smaller steps for finer control
     } else if (event.code === this.settings.keyBindings.speedDown && event.shiftKey) {
       // Shift + speed down key - decrease speed
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      this.adjustPlaybackRate(-0.05);
+      this.adjustPlaybackRate(-0.01); // Smaller steps for finer control
     } else if (event.code === this.settings.keyBindings.toggleMetronome && event.shiftKey) {
       // Shift + M - toggle metronome
       event.preventDefault();
@@ -320,17 +320,17 @@ class PunchLooper {
       event.stopImmediatePropagation();
       this.toggleMetronome();
     } else if (event.code === this.settings.keyBindings.pitchUp && event.shiftKey) {
-      // Shift + pitch up key - pitch up half step
+      // Shift + pitch up key - pitch up 1 chromatic step
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      this.adjustPitch(0.5);
+      this.adjustPitch(1); // 1 semitone steps for discrete positions
     } else if (event.code === this.settings.keyBindings.pitchDown && event.shiftKey) {
-      // Shift + pitch down key - pitch down half step
+      // Shift + pitch down key - pitch down 1 chromatic step
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      this.adjustPitch(-0.5);
+      this.adjustPitch(-1); // 1 semitone steps for discrete positions
     } else if (event.code === this.settings.keyBindings.resetPitch && event.shiftKey) {
       // Shift + reset key - reset pitch and speed
       event.preventDefault();
@@ -368,17 +368,17 @@ class PunchLooper {
       event.stopImmediatePropagation();
       this.toggleAudioEngine();
     } else if (event.code === 'ArrowLeft' && event.shiftKey) {
-      // Shift + Left Arrow - fine pitch down (0.1 semitone)
+      // Shift + Left Arrow - pitch down 1 chromatic step
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      this.adjustPitch(-0.1);
+      this.adjustPitch(-1);
     } else if (event.code === 'ArrowRight' && event.shiftKey) {
-      // Shift + Right Arrow - fine pitch up (0.1 semitone)
+      // Shift + Right Arrow - pitch up 1 chromatic step
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      this.adjustPitch(0.1);
+      this.adjustPitch(1);
     } else if (event.code === 'KeyG' && event.shiftKey) {
       // Shift + G - toggle guitar pedal GUI
       event.preventDefault();
@@ -534,9 +534,8 @@ class PunchLooper {
   private adjustPlaybackRate(delta: number): void {
     if (!this.state.activeMedia) return;
 
-    // Update speed multiplier (clamp between 0.25x and 4.0x)
-    const speedStep = 0.05;
-    this.state.currentSpeedMultiplier = Math.max(0.25, Math.min(4.0, this.state.currentSpeedMultiplier + (delta > 0 ? speedStep : -speedStep)));
+    // Update speed multiplier (clamp between 0.5x and 1.5x) with noon = 1.0x
+    this.state.currentSpeedMultiplier = Math.max(0.5, Math.min(1.5, this.state.currentSpeedMultiplier + delta));
     
     // Use native browser capabilities for pitch-preserving speed control
     this.state.activeMedia.preservesPitch = true;
@@ -572,21 +571,44 @@ class PunchLooper {
     // Update pitch shift value (clamp between -12 and +12 semitones)
     this.state.currentPitchShift = Math.max(-12, Math.min(12, this.state.currentPitchShift + semitones));
     
+    this.applyPitchShift();
+  }
+
+  private adjustPitchSmooth(delta: number): void {
+    if (!this.state.activeMedia) return;
+
+    // Smooth pitch adjustment that snaps to chromatic positions
+    let newPitch = this.state.currentPitchShift + delta;
+    
+    // Clamp to -6 to +6 semitones range
+    newPitch = Math.max(-6, Math.min(6, newPitch));
+    
+    // Round to nearest chromatic step (integer semitone)
+    const snappedPitch = Math.round(newPitch);
+    
+    if (snappedPitch !== this.state.currentPitchShift) {
+      this.state.currentPitchShift = snappedPitch;
+      this.applyPitchShift();
+    }
+  }
+
+  private applyPitchShift(): void {
+    if (!this.state.activeMedia) return;
+    
     // Calculate pitch ratio from semitones
     const pitchRatio = this.semitoneToRatio(this.state.currentPitchShift);
     
-    // For pitch changes, temporarily disable preservesPitch and adjust playbackRate
-    // Then restore the original speed by adjusting back
+    // For pitch changes, disable preservesPitch and combine with speed
     this.state.activeMedia.preservesPitch = false;
     
-    // Apply combined pitch and speed change
+    // Apply ONLY pitch change - don't modify speed
     const combinedRate = pitchRatio * this.state.currentSpeedMultiplier;
     this.state.activeMedia.playbackRate = combinedRate;
     
     const pitchName = this.getPitchShiftName(this.state.currentPitchShift);
-    this.showHUD(`Pitch: ${pitchName} (Speed: ${this.state.currentSpeedMultiplier.toFixed(2)}x)`, 1000);
+    this.showHUD(`Pitch: ${pitchName}`, 1000);
     
-    console.log(`[PunchLooper] Pitch adjusted to ${this.state.currentPitchShift} semitones, combined rate: ${combinedRate.toFixed(3)}x`);
+    console.log(`[PunchLooper] Pitch: ${this.state.currentPitchShift} semitones, Speed: ${this.state.currentSpeedMultiplier}x, Combined: ${combinedRate.toFixed(3)}x`);
     
     // Update pitch knob rotation
     this.updateKnobRotation('pitch');
@@ -1310,17 +1332,20 @@ class PunchLooper {
     if (!this.state.isDraggingKnob) return;
 
     const deltaY = e.movementY;
-    const sensitivity = 0.5;
     
     switch (this.state.isDraggingKnob) {
       case 'pitch':
-        this.adjustPitch(-deltaY * sensitivity * 0.1); // Fine control
+        // Smooth pitch control that snaps to chromatic positions
+        const pitchSensitivity = 0.02; // Smooth sliding like speed
+        this.adjustPitchSmooth(-deltaY * pitchSensitivity);
         break;
       case 'speed':
-        this.adjustPlaybackRate(-deltaY * sensitivity * 0.01);
+        // Smooth speed control: 0.5x to 1.5x with noon = 1.0x
+        const speedSensitivity = 0.002; // Keep same sensitivity
+        this.adjustPlaybackRate(-deltaY * speedSensitivity);
         break;
       case 'volume':
-        this.adjustVolume(-deltaY * sensitivity * 0.02);
+        this.adjustVolume(-deltaY * 0.005);
         break;
     }
     
@@ -1344,17 +1369,14 @@ class PunchLooper {
     
     switch (param) {
       case 'pitch':
-        // Map pitch shift to knob rotation: -12 to +12 semitones = -150° to +150°
-        angle = (this.state.currentPitchShift / 12) * 150;
+        // 13 discrete positions: -6 to +6 semitones = -150° to +150°
+        angle = (this.state.currentPitchShift / 6) * 150;
         break;
       case 'speed':
-        // Map speed multiplier to knob rotation: 0.25x to 4.0x = -150° to +150°
-        // Center position (0°) = 1.0x speed
-        // Log scale for better feel: log2(speed) normalized
-        const logSpeed = Math.log2(this.state.currentSpeedMultiplier);
-        const maxLogSpeed = Math.log2(4.0); // log2(4) = 2
-        const minLogSpeed = Math.log2(0.25); // log2(0.25) = -2
-        angle = (logSpeed / maxLogSpeed) * 150;
+        // Speed range 0.5x to 1.5x with noon (0°) = 1.0x
+        // Map: 0.5x to -150°, 1.0x to 0°, 1.5x to +150°
+        const normalizedSpeed = (this.state.currentSpeedMultiplier - 1.0) / 0.5; // -1 to +1 range
+        angle = normalizedSpeed * 150; // Map to -150° to +150°
         break;
       case 'volume':
         // Volume not implemented yet, keep at 0

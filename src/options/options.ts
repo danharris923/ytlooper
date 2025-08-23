@@ -174,8 +174,8 @@ class OptionsManager {
   }
 
   private validateSettings(settings: LooperSettings): boolean {
-    if (settings.latencyCompensation < 0 || settings.latencyCompensation > 100) {
-      this.showStatus('Latency compensation must be between 0-100ms', 'error');
+    if (settings.latencyCompensation < -200 || settings.latencyCompensation > 100) {
+      this.showStatus('Latency compensation must be between -200 to 100ms', 'error');
       return false;
     }
 

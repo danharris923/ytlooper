@@ -3,14 +3,13 @@
   "name": "Punch Looper",
   "description": "Tap in, tap out, and loop any HTML5 audio/video instantly.",
   "version": "1.0.0",
-  "permissions": ["storage", "scripting", "tabs"],
-  "host_permissions": ["https://www.youtube.com/*"],
+  "permissions": ["storage", "scripting"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
     "default_title": "Open YT Looper",
-    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",
@@ -20,7 +19,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.youtube.com/*"],
+      "matches": ["<all_urls>"],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
@@ -28,7 +27,7 @@
   "web_accessible_resources": [
     {
       "resources": ["lib/soundtouch.min.js"],
-      "matches": ["https://www.youtube.com/*"]
+      "matches": ["<all_urls>"]
     }
   ],
   "options_page": "options.html",
