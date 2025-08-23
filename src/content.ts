@@ -6,6 +6,10 @@ interface LooperSettings {
   edgeBleed: number;
   metronomeEnabled: boolean;
   clicksPerLoop: number;
+  pointAPreTrim: number;
+  pointAPostTrim: number;
+  pointBPreTrim: number;
+  pointBPostTrim: number;
   keyBindings: {
     setPointA: string;
     setPointB: string;
@@ -57,6 +61,10 @@ class PunchLooper {
     edgeBleed: 100,
     metronomeEnabled: false,
     clicksPerLoop: 4,
+    pointAPreTrim: 0,
+    pointAPostTrim: 0,
+    pointBPreTrim: 0,
+    pointBPostTrim: 150,
     keyBindings: {
       setPointA: 'BracketLeft',
       setPointB: 'BracketRight', 
@@ -423,8 +431,12 @@ class PunchLooper {
       return;
     }
     
-    this.state.pointA = this.state.activeMedia.currentTime;
-    console.log('Set Point A at:', this.state.pointA);
+    // Apply pre-trim offset when setting point A
+    let adjustedTime = this.state.activeMedia.currentTime + (this.settings.pointAPreTrim / 1000);
+    adjustedTime = Math.max(0, adjustedTime); // Don't go negative
+    
+    this.state.pointA = adjustedTime;
+    console.log(`Set Point A at: ${this.state.pointA} (original: ${this.state.activeMedia.currentTime}, pre-trim: ${this.settings.pointAPreTrim}ms)`);
     const timeStr = this.formatTime(this.state.pointA);
     this.showHUD(`A @ ${timeStr}`, 700);
   }
@@ -432,8 +444,16 @@ class PunchLooper {
   private setPointB(): void {
     if (!this.state.activeMedia || this.state.pointA === null) return;
     
-    this.state.pointB = this.state.activeMedia.currentTime;
-    console.log('Set Point B at:', this.state.pointB);
+    // Apply pre-trim then post-trim offsets when setting point B
+    let adjustedTime = this.state.activeMedia.currentTime + (this.settings.pointBPreTrim / 1000);
+    adjustedTime = Math.max(0, adjustedTime); // Don't go negative
+    
+    // Apply post-trim (default 150ms back to fix loop timing)
+    adjustedTime += (this.settings.pointBPostTrim / 1000);
+    adjustedTime = Math.max(0, adjustedTime);
+    
+    this.state.pointB = adjustedTime;
+    console.log(`Set Point B at: ${this.state.pointB} (original: ${this.state.activeMedia.currentTime}, pre-trim: ${this.settings.pointBPreTrim}ms, post-trim: ${this.settings.pointBPostTrim}ms)`);
     console.log('Loop length:', this.state.pointB - this.state.pointA, 'seconds');
     
     if (this.state.pointB <= this.state.pointA) {
@@ -445,6 +465,9 @@ class PunchLooper {
     const timeStr = this.formatTime(this.state.pointB);
     const lengthStr = this.formatTime(this.state.pointB - this.state.pointA);
     this.showHUD(`B @ ${timeStr} (len=${lengthStr})`, 700);
+    
+    // Auto-start looping
+    this.startLoop();
   }
 
   private startLoop(): void {
@@ -586,10 +609,9 @@ class PunchLooper {
     // Round to nearest chromatic step (integer semitone)
     const snappedPitch = Math.round(newPitch);
     
-    if (snappedPitch !== this.state.currentPitchShift) {
-      this.state.currentPitchShift = snappedPitch;
-      this.applyPitchShift();
-    }
+    // Always update the pitch (even if same value) to provide visual feedback
+    this.state.currentPitchShift = snappedPitch;
+    this.applyPitchShift();
   }
 
   private applyPitchShift(): void {
@@ -1335,9 +1357,13 @@ class PunchLooper {
     
     switch (this.state.isDraggingKnob) {
       case 'pitch':
-        // Smooth pitch control that snaps to chromatic positions
-        const pitchSensitivity = 0.02; // Smooth sliding like speed
-        this.adjustPitchSmooth(-deltaY * pitchSensitivity);
+        // Direct chromatic stepping - more responsive
+        const pitchSensitivity = 0.1; // Higher sensitivity
+        const pitchDelta = -deltaY * pitchSensitivity;
+        if (Math.abs(pitchDelta) >= 0.2) { // Lower threshold for easier stepping
+          const step = pitchDelta > 0 ? 1 : -1;
+          this.adjustPitch(step);
+        }
         break;
       case 'speed':
         // Smooth speed control: 0.5x to 1.5x with noon = 1.0x
