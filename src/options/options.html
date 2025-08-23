@@ -4,12 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Punch Looper - Settings</title>
+  <link rel="icon" href="icons/icon-32.png" type="image/png">
   <link rel="stylesheet" href="options.css">
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>🎵 Punch Looper Settings</h1>
+      <h1><img src="icons/icon-48.png" alt="Looper" style="width: 32px; height: 32px; vertical-align: middle; margin-right: 8px;">Punch Looper Settings</h1>
       <p class="subtitle">Configure your looper pedal experience</p>
     </header>
 
@@ -46,6 +47,25 @@
         </section>
 
         <section class="setting-group">
+          <h2>Metronome</h2>
+          
+          <div class="setting">
+            <label for="metronomeEnabled">
+              <input type="checkbox" id="metronomeEnabled" name="metronomeEnabled">
+              Enable Metronome
+            </label>
+            <p class="setting-help">Play clicks during loop playback</p>
+          </div>
+
+          <div class="setting">
+            <label for="clicksPerLoop">Clicks Per Loop</label>
+            <input type="number" id="clicksPerLoop" name="clicksPerLoop" 
+                   min="1" max="64" step="1">
+            <p class="setting-help">Number of metronome clicks per loop cycle</p>
+          </div>
+        </section>
+
+        <section class="setting-group">
           <h2>Keyboard Shortcuts</h2>
           <div class="shortcuts">
             <div class="shortcut">
@@ -56,6 +76,36 @@
             </div>
             <div class="shortcut">
               <kbd>\</kbd> <span>Stop loop</span>
+            </div>
+            <div class="shortcut">
+              <kbd>Shift</kbd> + <kbd>+</kbd> <span>Increase speed 5%</span>
+            </div>
+            <div class="shortcut">
+              <kbd>Shift</kbd> + <kbd>-</kbd> <span>Decrease speed 5%</span>
+            </div>
+            <div class="shortcut">
+              <kbd>Shift</kbd> + <kbd>↑</kbd> <span>Pitch up ½ step</span>
+            </div>
+            <div class="shortcut">
+              <kbd>Shift</kbd> + <kbd>↓</kbd> <span>Pitch down ½ step</span>
+            </div>
+            <div class="shortcut">
+              <kbd>Shift</kbd> + <kbd>R</kbd> <span>Reset speed & pitch</span>
+            </div>
+            <div class="shortcut">
+              <kbd>Shift</kbd> + <kbd>M</kbd> <span>Toggle metronome</span>
+            </div>
+            <div class="shortcut">
+              <kbd>Shift</kbd> + <kbd>&lt;</kbd> <span>Move point A back 0.05s</span>
+            </div>
+            <div class="shortcut">
+              <kbd>Shift</kbd> + <kbd>&gt;</kbd> <span>Move point A forward 0.05s</span>
+            </div>
+            <div class="shortcut">
+              <kbd>Shift</kbd> + <kbd>:</kbd> <span>Move point B back 0.05s</span>
+            </div>
+            <div class="shortcut">
+              <kbd>Shift</kbd> + <kbd>"</kbd> <span>Move point B forward 0.05s</span>
             </div>
           </div>
         </section>

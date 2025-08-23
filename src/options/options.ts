@@ -5,6 +5,8 @@ interface LooperSettings {
   epsilon: number;
   enableHoldToDefine: boolean;
   edgeBleed: number;
+  metronomeEnabled: boolean;
+  clicksPerLoop: number;
 }
 
 class OptionsManager {
@@ -14,7 +16,9 @@ class OptionsManager {
     latencyCompensation: 50,
     epsilon: 50,
     enableHoldToDefine: false,
-    edgeBleed: 100
+    edgeBleed: 100,
+    metronomeEnabled: false,
+    clicksPerLoop: 4
   };
 
   private saveTimeout: number | null = null;
@@ -45,6 +49,8 @@ class OptionsManager {
     (form.elements.namedItem('latencyCompensation') as HTMLInputElement).value = settings.latencyCompensation.toString();
     (form.elements.namedItem('epsilon') as HTMLInputElement).value = settings.epsilon.toString();
     (form.elements.namedItem('edgeBleed') as HTMLInputElement).value = settings.edgeBleed.toString();
+    (form.elements.namedItem('metronomeEnabled') as HTMLInputElement).checked = settings.metronomeEnabled;
+    (form.elements.namedItem('clicksPerLoop') as HTMLInputElement).value = settings.clicksPerLoop.toString();
   }
 
   private setupEventListeners(): void {
@@ -91,7 +97,9 @@ class OptionsManager {
       latencyCompensation: parseInt((form.elements.namedItem('latencyCompensation') as HTMLInputElement).value, 10),
       epsilon: parseInt((form.elements.namedItem('epsilon') as HTMLInputElement).value, 10),
       enableHoldToDefine: false, // Fixed
-      edgeBleed: parseInt((form.elements.namedItem('edgeBleed') as HTMLInputElement).value, 10)
+      edgeBleed: parseInt((form.elements.namedItem('edgeBleed') as HTMLInputElement).value, 10),
+      metronomeEnabled: (form.elements.namedItem('metronomeEnabled') as HTMLInputElement).checked,
+      clicksPerLoop: parseInt((form.elements.namedItem('clicksPerLoop') as HTMLInputElement).value, 10)
     };
 
     // Validate settings
@@ -121,6 +129,11 @@ class OptionsManager {
 
     if (settings.edgeBleed < 0 || settings.edgeBleed > 300) {
       this.showStatus('Edge bleed must be between 0-300ms', 'error');
+      return false;
+    }
+
+    if (settings.clicksPerLoop < 1 || settings.clicksPerLoop > 64) {
+      this.showStatus('Clicks per loop must be between 1-64', 'error');
       return false;
     }
 

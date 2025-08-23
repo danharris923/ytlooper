@@ -1,143 +1,162 @@
 # 🎵 Punch Looper
 
-A production-grade Chrome MV3 extension that adds A/B loop functionality to any HTML5 `<video>` or `<audio>` element. Experience the feel of a looper pedal right in your browser.
+A Chrome extension that adds A/B looping functionality to HTML5 video and audio elements, like a guitar looper pedal.
+
+![Punch Looper Icon](public/icons/icon-128.png)
 
 ## Features
 
-- **Double-tap A/B looping**: Tap once to set A, tap again within 450ms to set B and start looping
-- **Hold-to-define mode**: Hold the looper key to set A, release to set B and loop
-- **Instant musical loops**: Uses `requestAnimationFrame` with tight edge detection and latency compensation
-- **Smart media detection**: Automatically finds and prefers currently-playing media
-- **SPA navigation support**: Works on sites like YouTube with in-app navigation
-- **Minimal UI**: Subtle HUD that only appears during actions and auto-hides
-- **Pitch preservation**: Maintains audio pitch during rate changes where supported
-- **Rate control**: Fine-tune playback speed with keyboard shortcuts
+- **Simple Controls**: Use `[` and `]` keys to set loop points, `\` to stop
+- **Professional Pitch Control**: Independent pitch shifting without affecting speed
+- **High-Quality Audio Engine**: Web Audio API with real-time processing
+- **Speed Control**: Change playback speed while maintaining pitch
+- **Works Everywhere**: YouTube, Vimeo, and any site with HTML5 media
+- **Seamless Looping**: Edge bleeding for smooth transitions
+- **Smart Detection**: Automatically finds the active media element
+- **Low CPU Usage**: Efficient `requestAnimationFrame` loop engine
+- **Built-in Metronome**: Helps with timing and rhythm practice
+- **Fine Control**: Precise 0.1 semitone pitch adjustments
+- **Boss RC-Style GUI**: Authentic guitar pedal interface with mouse control
+- **Interactive Knobs**: Drag to adjust pitch, speed, and volume
+- **LED Status Indicators**: Visual feedback for A/B points and loop state
+- **Draggable Interface**: Position the pedal GUI anywhere on screen
+- **Configurable**: Adjust timing and audio settings
 
 ## Installation
 
-### From Chrome Web Store
-*(Coming soon)*
-
-### Developer Installation
 1. Download or clone this repository
 2. Run `npm install` to install dependencies
 3. Run `npm run build` to build the extension
-4. Open Chrome and navigate to `chrome://extensions/`
-5. Enable "Developer mode" in the top right
+4. Open Chrome and go to `chrome://extensions/`
+5. Enable "Developer mode"
 6. Click "Load unpacked" and select the `dist/` folder
 
 ## Usage
 
-### Basic Looping
-1. Navigate to any page with video or audio (YouTube, course sites, etc.)
-2. **Double-tap `L`** (default key):
-   - First tap sets point A (punch-in)
-   - Second tap (within 450ms) sets point B (punch-out) and starts looping
-3. **Single tap `L`** while looping to stop
+### Keyboard Shortcuts
 
-### Hold-to-Define Mode
-1. **Hold down `L`** to mark point A
-2. **Release `L`** to mark point B and start looping immediately
-3. Great for capturing live moments or precise timing
+#### Basic Looping
+- **`[`** - Set point A (punch in)
+- **`]`** - Set point B (punch out) and start looping  
+- **`\`** - Stop loop
 
-### Advanced Controls
-- **Shift + P**: Clear A/B points
-- **Shift + =**: Increase playback rate by 0.05 (max 4.0x)
-- **Shift + -**: Decrease playback rate by 0.05 (min 0.25x)
+#### Audio Control (NEW! 🎛️)
+- **`Shift + =`** - Increase playback speed
+- **`Shift + -`** - Decrease playback speed
+- **`Shift + ↑`** - Pitch up (0.5 semitones)
+- **`Shift + ↓`** - Pitch down (0.5 semitones)
+- **`Shift + ←`** - Fine pitch down (0.1 semitones)
+- **`Shift + →`** - Fine pitch up (0.1 semitones)
+- **`Shift + R`** - Reset pitch and speed to normal
+- **`Shift + E`** - Toggle high-quality audio engine
 
-All shortcuts are ignored when typing in input fields or contentEditable areas.
+#### Loop Edge Adjustment
+- **`Shift + <`** - Move point A backward
+- **`Shift + >`** - Move point A forward
+- **`Shift + :`** - Move point B backward
+- **`Shift + "`** - Move point B forward
 
-## Keyboard Shortcuts
+#### Metronome
+- **`Shift + M`** - Toggle metronome
 
-| Shortcut | Action |
-|----------|--------|
-| `L` `L` (double-tap) | Set A→B points and start loop |
-| `L` (while looping) | Stop loop |
-| `L` (hold) | Hold-to-define: A on press, B on release |
-| `Shift` + `P` | Clear A/B points |
-| `Shift` + `=` | Increase playback rate (+0.05) |
-| `Shift` + `-` | Decrease playback rate (-0.05) |
+#### Guitar Pedal GUI (NEW! 🎸)
+- **`Shift + G`** - Toggle YT Looper pedal interface
+- **Extension Icon Click** - Opens the pedal GUI automatically
 
-## Configuration
+### How It Works
 
-Access the options page via `chrome://extensions/` → Punch Looper → Options.
+**Keyboard Control (Traditional)**
+1. Navigate to any page with video/audio (like YouTube)
+2. Press `[` to mark the start of your loop (point A)
+3. Press `]` to mark the end and immediately start looping (point B)
+4. Use `Shift + ↑/↓` to adjust pitch, `Shift + +/-` to adjust speed
+5. Press `Shift + E` to enable the high-quality audio engine for better pitch control
+6. Press `\` to stop the loop
 
-### Settings
+**Guitar Pedal GUI (Mouse Control)**
+1. Click the extension icon in the toolbar OR press `Shift + G` to show the pedal interface
+2. Click the large square footswitch to set A, then B, then start looping
+3. Drag the **PITCH** knob to adjust pitch (maintains speed)
+4. Drag the **TEMPO** knob to adjust speed (maintains pitch)  
+5. Drag the **LEVEL** knob to control volume
+6. Click the blue **HQ** LED to toggle the high-quality audio engine
+7. Click the **SET** gear to open advanced settings (latency, edge bleed, etc.)
+8. Drag the pedal to reposition it anywhere on screen
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Looper Key** | L | Key used for loop controls |
-| **Double-tap Window** | 450ms | Max time between taps for double-tap |
-| **Latency Compensation** | 30ms | Pre-roll time to reduce perceived latency |
-| **Loop Edge Epsilon** | 10ms | Precision threshold for loop detection |
-| **Hold-to-Define** | Enabled | Allow hold-down mode for A/B setting |
+The extension automatically detects the active media element and works seamlessly with single-page applications.
 
-### Recommended Settings
-- **Music/Audio**: Latency compensation 30-50ms, epsilon 5-10ms
-- **Speech/Lectures**: Latency compensation 20-30ms, epsilon 10-15ms
-- **Gaming/Live**: Latency compensation 10-20ms, epsilon 5ms
+### Audio Engine Modes
+
+**Basic Mode (Default)**
+- Uses native HTML5 playback rate control
+- Pitch and speed are linked (changing speed affects pitch)
+- Lower CPU usage, compatible everywhere
+
+**High-Quality Mode (Shift + E)**
+- Uses Web Audio API with AudioWorklet processing
+- Independent pitch and speed control
+- Professional-grade audio processing
+- Slightly higher CPU usage, requires modern browser
+
+### Why Better Than YouTube's Built-in Speed Control?
+
+YouTube's native speed control has a major limitation: changing speed also changes pitch, creating that "chipmunk" or "slow-motion" effect that sounds terrible for music practice. 
+
+**Punch Looper solves this by:**
+- **Independent Control**: Change speed without affecting pitch, or pitch without affecting speed
+- **High-Quality Processing**: Uses advanced Web Audio API algorithms instead of simple playback rate changes
+- **Musical Intervals**: Pitch control in musically meaningful semitone increments
+- **Fine Control**: 0.1 semitone precision for perfect tuning
+- **Professional Interface**: Authentic Boss RC loop station GUI with tactile knob controls
+- **Mouse + Keyboard**: Use whichever control method feels more natural
+- **Professional Features**: Built-in metronome, loop edge adjustment, and more
+
+### GUI Design
+
+The pedal interface is inspired by professional looper pedals with:
+- **Authentic red and black color scheme** 
+- **Chrome knobs** with realistic shadows and gradients
+- **Status LEDs** (green for A/B points, red for loop, blue for HQ engine)
+- **Large square footswitch** for professional feel
+- **Settings gear** for quick access to latency and timing controls
+- **Stereo input jacks** visual detail
+- **YTLOOPER branding** and professional typography
+- **Draggable positioning** - place it wherever works best
+- **Taller enclosure** for better proportions and more authentic look
+
+## Settings
+
+**Quick Access:** Click the settings gear (⚙️) on the pedal interface  
+**Advanced:** Go to `chrome://extensions/` and click "Options" on the extension
+
+### Quick Settings (Pedal Interface)
+- **Latency Compensation** - Adjust timing to compensate for audio delay
+- **Loop Edge Bleed** - Control overlap before/after loop points for smoother transitions  
+- **Double Tap Window** - Set time window for double-tap to reset loops
+
+### Full Options Page
+Access the complete settings interface for additional configuration options.
+
+### Audio Engine Settings
+
+- **Latency Compensation**: Pre-roll time to compensate for playback latency (0-100ms)
+- **Loop Edge Epsilon**: Precision threshold for loop edge detection (1-50ms)  
+- **Edge Bleed**: Overlap before A and after B for smoother loops (0-300ms)
 
 ## Technical Details
 
-### Media Detection
-- Prioritizes currently playing media elements
-- Falls back to largest visible media element
-- Automatically rescans when DOM changes (SPA support)
-- Handles multiple media elements gracefully
+- **Manifest V3** Chrome extension
+- **TypeScript** with ES2020 target
+- **Vite** build system
+- **requestAnimationFrame** for efficient looping
+- **Event capture phase** for reliable key interception
+- **MutationObserver** for SPA navigation detection
+- **Chrome Storage Sync** for settings persistence
 
-### Loop Engine
-- Single `requestAnimationFrame` loop for minimal CPU usage
-- Tight edge detection with configurable epsilon
-- Latency pre-roll compensation for instant-feeling restarts
-- Preserves pitch where browser supports it
+## Browser Support
 
-### Browser Compatibility
-- Chrome 88+ (Manifest V3)
-- Edge 88+
-- Works on all sites with HTML5 media
-- Handles DRM-protected content limitations gracefully
-
-## Troubleshooting
-
-### "No media found" message
-- Ensure the page has loaded completely
-- Try refreshing the page
-- Some DRM-protected content may not be accessible
-
-### Loops feel sluggish
-- Increase latency compensation in options (try 40-60ms)
-- Decrease epsilon for tighter loop edges (try 5-8ms)
-- Check if the media element has high latency
-
-### Shortcuts not working
-- Ensure you're not typing in an input field
-- Check if the page has focus (click on the video area)
-- Try the hold-to-define mode instead
-
-### SPA navigation issues
-- Extension automatically detects URL changes
-- May take 1-2 seconds to rescan for new media
-- A/B points are reset on navigation for consistency
-
-### Performance concerns
-- Extension uses <1-2% CPU when idle
-- Single RAF loop minimizes resource usage
-- No background page or persistent processes
-
-## Privacy & Security
-
-- **No network calls**: Extension works entirely offline
-- **No background page**: Only runs when tabs are active
-- **Minimal permissions**: Only requires storage for settings
-- **No data collection**: Zero telemetry or analytics
-- **Open source**: Full source code available for audit
-
-## Known Limitations
-
-- DRM-protected content (Netflix, some streaming sites) may not be controllable
-- Some sites may hide media elements from script access
-- Audio-only content may require larger epsilon values for reliable looping
-- Browsers may limit playback rate changes on certain media types
+- Chrome 88+ (Manifest V3 support required)
+- Chromium-based browsers (Edge, Brave, etc.)
 
 ## Development
 
@@ -188,10 +207,8 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ### v1.0.0
 - Initial release
-- Double-tap A/B looping
-- Hold-to-define mode  
+- A/B looping with `[` `]` `\` keys
 - Smart media detection
-- SPA navigation support
-- Configurable settings
-- Rate control shortcuts
-- Minimal CPU usage design
+- Edge bleeding for seamless loops
+- Modern settings interface
+- Works on YouTube, Vimeo, and all HTML5 media
