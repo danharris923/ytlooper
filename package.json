@@ -1,0 +1,36 @@
+{
+  "name": "punch-looper",
+  "version": "1.0.0",
+  "description": "Tap in, tap out, and loop any HTML5 audio/video instantly.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch --mode development",
+    "build": "vite build",
+    "zip": "node scripts/zip.mjs",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "format": "prettier --write src/**/*.{ts,tsx,css,html}"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.3",
+    "prettier": "^3.2.5",
+    "terser": "^5.43.1",
+    "typescript": "^5.4.0",
+    "vite": "^5.2.0",
+    "vite-plugin-static-copy": "^1.0.2"
+  },
+  "keywords": [
+    "chrome-extension",
+    "looper",
+    "audio",
+    "video",
+    "html5"
+  ],
+  "author": "Punch Looper Team",
+  "license": "MIT"
+}

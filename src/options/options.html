@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Punch Looper - Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎵 Punch Looper Settings</h1>
+      <p class="subtitle">Configure your looper pedal experience</p>
+    </header>
+
+    <main>
+      <form id="settingsForm">
+        <section class="setting-group">
+          <h2>Simple Controls</h2>
+          <p class="setting-help">Use [ to set point A, ] to set point B and start loop, \ to stop.</p>
+        </section>
+
+        <section class="setting-group">
+          <h2>Audio Engine</h2>
+          
+          <div class="setting">
+            <label for="latencyCompensation">Latency Compensation (ms)</label>
+            <input type="number" id="latencyCompensation" name="latencyCompensation" 
+                   min="0" max="100" step="5">
+            <p class="setting-help">Pre-roll time to compensate for playback latency</p>
+          </div>
+
+          <div class="setting">
+            <label for="epsilon">Loop Edge Epsilon (ms)</label>
+            <input type="number" id="epsilon" name="epsilon" 
+                   min="1" max="50" step="1">
+            <p class="setting-help">Precision threshold for loop edge detection</p>
+          </div>
+
+          <div class="setting">
+            <label for="edgeBleed">Edge Bleed (ms)</label>
+            <input type="number" id="edgeBleed" name="edgeBleed" 
+                   min="0" max="300" step="25">
+            <p class="setting-help">Overlap before A and after B for smoother loops</p>
+          </div>
+        </section>
+
+        <section class="setting-group">
+          <h2>Keyboard Shortcuts</h2>
+          <div class="shortcuts">
+            <div class="shortcut">
+              <kbd>[</kbd> <span>Set point A (punch in)</span>
+            </div>
+            <div class="shortcut">
+              <kbd>]</kbd> <span>Set point B (punch out) and start looping</span>
+            </div>
+            <div class="shortcut">
+              <kbd>\</kbd> <span>Stop loop</span>
+            </div>
+          </div>
+        </section>
+      </form>
+    </main>
+
+    <footer>
+      <div class="status" id="status"></div>
+      <div class="buttons">
+        <button type="button" id="resetBtn" class="btn-secondary">Reset to Defaults</button>
+        <button type="button" id="saveBtn" class="btn-primary">Save Settings</button>
+      </div>
+    </footer>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
