@@ -6,6 +6,10 @@ interface LooperSettings {
   edgeBleed: number;
   metronomeEnabled: boolean;
   clicksPerLoop: number;
+  pointAPreTrim: number;
+  pointAPostTrim: number;
+  pointBPreTrim: number;
+  pointBPostTrim: number;
   keyBindings: {
     setPointA: string;
     setPointB: string;
@@ -32,6 +36,10 @@ class OptionsManager {
     edgeBleed: 100,
     metronomeEnabled: false,
     clicksPerLoop: 4,
+    pointAPreTrim: 0,
+    pointAPostTrim: 0,
+    pointBPreTrim: 0,
+    pointBPostTrim: 150,
     keyBindings: {
       setPointA: 'BracketLeft',
       setPointB: 'BracketRight', 
@@ -79,6 +87,12 @@ class OptionsManager {
     (form.elements.namedItem('edgeBleed') as HTMLInputElement).value = settings.edgeBleed.toString();
     (form.elements.namedItem('metronomeEnabled') as HTMLInputElement).checked = settings.metronomeEnabled;
     (form.elements.namedItem('clicksPerLoop') as HTMLInputElement).value = settings.clicksPerLoop.toString();
+    
+    // Populate loop point trim settings
+    (form.elements.namedItem('pointAPreTrim') as HTMLInputElement).value = settings.pointAPreTrim.toString();
+    (form.elements.namedItem('pointAPostTrim') as HTMLInputElement).value = settings.pointAPostTrim.toString();
+    (form.elements.namedItem('pointBPreTrim') as HTMLInputElement).value = settings.pointBPreTrim.toString();
+    (form.elements.namedItem('pointBPostTrim') as HTMLInputElement).value = settings.pointBPostTrim.toString();
     
     // Populate key bindings
     (form.elements.namedItem('setPointA') as HTMLInputElement).value = settings.keyBindings.setPointA;
@@ -142,6 +156,10 @@ class OptionsManager {
       edgeBleed: parseInt((form.elements.namedItem('edgeBleed') as HTMLInputElement).value, 10),
       metronomeEnabled: (form.elements.namedItem('metronomeEnabled') as HTMLInputElement).checked,
       clicksPerLoop: parseInt((form.elements.namedItem('clicksPerLoop') as HTMLInputElement).value, 10),
+      pointAPreTrim: parseInt((form.elements.namedItem('pointAPreTrim') as HTMLInputElement).value, 10),
+      pointAPostTrim: parseInt((form.elements.namedItem('pointAPostTrim') as HTMLInputElement).value, 10),
+      pointBPreTrim: parseInt((form.elements.namedItem('pointBPreTrim') as HTMLInputElement).value, 10),
+      pointBPostTrim: parseInt((form.elements.namedItem('pointBPostTrim') as HTMLInputElement).value, 10),
       keyBindings: {
         setPointA: (form.elements.namedItem('setPointA') as HTMLInputElement).value || 'BracketLeft',
         setPointB: (form.elements.namedItem('setPointB') as HTMLInputElement).value || 'BracketRight',
@@ -174,8 +192,8 @@ class OptionsManager {
   }
 
   private validateSettings(settings: LooperSettings): boolean {
-    if (settings.latencyCompensation < 0 || settings.latencyCompensation > 100) {
-      this.showStatus('Latency compensation must be between 0-100ms', 'error');
+    if (settings.latencyCompensation < -200 || settings.latencyCompensation > 100) {
+      this.showStatus('Latency compensation must be between -200 to 100ms', 'error');
       return false;
     }
 
@@ -191,6 +209,26 @@ class OptionsManager {
 
     if (settings.clicksPerLoop < 1 || settings.clicksPerLoop > 64) {
       this.showStatus('Clicks per loop must be between 1-64', 'error');
+      return false;
+    }
+
+    if (settings.pointAPreTrim < -500 || settings.pointAPreTrim > 500) {
+      this.showStatus('Point A pre-trim must be between -500 to 500ms', 'error');
+      return false;
+    }
+
+    if (settings.pointAPostTrim < -500 || settings.pointAPostTrim > 500) {
+      this.showStatus('Point A post-trim must be between -500 to 500ms', 'error');
+      return false;
+    }
+
+    if (settings.pointBPreTrim < -500 || settings.pointBPreTrim > 500) {
+      this.showStatus('Point B pre-trim must be between -500 to 500ms', 'error');
+      return false;
+    }
+
+    if (settings.pointBPostTrim < -500 || settings.pointBPostTrim > 500) {
+      this.showStatus('Point B post-trim must be between -500 to 500ms', 'error');
       return false;
     }
 

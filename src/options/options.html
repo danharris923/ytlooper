@@ -27,8 +27,8 @@
           <div class="setting">
             <label for="latencyCompensation">Latency Compensation (ms)</label>
             <input type="number" id="latencyCompensation" name="latencyCompensation" 
-                   min="0" max="100" step="5">
-            <p class="setting-help">Pre-roll time to compensate for playback latency</p>
+                   min="-200" max="100" step="5">
+            <p class="setting-help">Pre-roll time to compensate for playback latency (negative = pre-grab)</p>
           </div>
 
           <div class="setting">
@@ -62,6 +62,39 @@
             <input type="number" id="clicksPerLoop" name="clicksPerLoop" 
                    min="1" max="64" step="1">
             <p class="setting-help">Number of metronome clicks per loop cycle</p>
+          </div>
+        </section>
+
+        <section class="setting-group">
+          <h2>Loop Point Trim</h2>
+          <p class="setting-help">Fine-tune loop points with automatic offsets (positive = later, negative = earlier)</p>
+          
+          <div class="setting">
+            <label for="pointAPreTrim">Point A Pre-Trim (ms)</label>
+            <input type="number" id="pointAPreTrim" name="pointAPreTrim" 
+                   min="-500" max="500" step="25">
+            <p class="setting-help">Adjust point A timing before it's set</p>
+          </div>
+
+          <div class="setting">
+            <label for="pointAPostTrim">Point A Post-Trim (ms)</label>
+            <input type="number" id="pointAPostTrim" name="pointAPostTrim" 
+                   min="-500" max="500" step="25">
+            <p class="setting-help">Adjust point A timing after it's set</p>
+          </div>
+
+          <div class="setting">
+            <label for="pointBPreTrim">Point B Pre-Trim (ms)</label>
+            <input type="number" id="pointBPreTrim" name="pointBPreTrim" 
+                   min="-500" max="500" step="25">
+            <p class="setting-help">Adjust point B timing before it's set</p>
+          </div>
+
+          <div class="setting">
+            <label for="pointBPostTrim">Point B Post-Trim (ms)</label>
+            <input type="number" id="pointBPostTrim" name="pointBPostTrim" 
+                   min="-500" max="500" step="25">
+            <p class="setting-help">Default: 150ms back (fixes loop timing)</p>
           </div>
         </section>
 

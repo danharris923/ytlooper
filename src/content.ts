@@ -6,6 +6,10 @@ interface LooperSettings {
   edgeBleed: number;
   metronomeEnabled: boolean;
   clicksPerLoop: number;
+  pointAPreTrim: number;
+  pointAPostTrim: number;
+  pointBPreTrim: number;
+  pointBPostTrim: number;
   keyBindings: {
     setPointA: string;
     setPointB: string;
@@ -41,6 +45,11 @@ interface LooperState {
   guiElement: HTMLElement | null;
   isGuiVisible: boolean;
   isDraggingKnob: string | null;
+  // Simplified audio processing with native browser capabilities
+  currentPitchShift: number; // Independent pitch control (-12 to +12 semitones)
+  currentSpeedMultiplier: number; // Independent speed control (0.25 to 4.0)
+  basePitchRatio: number; // Base pitch ratio for calculations
+  baseSpeedRatio: number; // Base speed ratio for calculations
 }
 
 class PunchLooper {
@@ -52,6 +61,10 @@ class PunchLooper {
     edgeBleed: 100,
     metronomeEnabled: false,
     clicksPerLoop: 4,
+    pointAPreTrim: 0,
+    pointAPostTrim: 0,
+    pointBPreTrim: 0,
+    pointBPostTrim: 150,
     keyBindings: {
       setPointA: 'BracketLeft',
       setPointB: 'BracketRight', 
@@ -86,7 +99,12 @@ class PunchLooper {
     lastClickTime: 0,
     guiElement: null,
     isGuiVisible: false,
-    isDraggingKnob: null
+    isDraggingKnob: null,
+    // Simplified audio processing
+    currentPitchShift: 0,
+    currentSpeedMultiplier: 1.0,
+    basePitchRatio: 1.0,
+    baseSpeedRatio: 1.0
   };
 
   // Musical intervals - each step is a semitone
@@ -112,6 +130,18 @@ class PunchLooper {
 
   constructor() {
     this.init();
+  }
+
+  // Removed SoundTouch injection - using native browser capabilities instead
+
+  // Removed complex audio context setup - using simple native controls
+
+  // Removed SoundTouch processor - using direct media element control
+
+  private semitoneToRatio(semitones: number): number {
+    // Convert semitone shift to frequency ratio
+    // Each semitone is 2^(1/12) ratio
+    return Math.pow(2, semitones / 12);
   }
 
   private async init(): Promise<void> {
@@ -239,6 +269,11 @@ class PunchLooper {
       this.cleanupAudioProcessing();
       this.state.activeMedia = bestMedia;
       this.resetLoop();
+      
+      // Initialize native audio controls for the new media element
+      if (this.state.activeMedia) {
+        this.initializeNativeAudioControls();
+      }
     }
   }
 
@@ -279,13 +314,13 @@ class PunchLooper {
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      this.adjustPlaybackRate(0.05);
+      this.adjustPlaybackRate(0.01); // Smaller steps for finer control
     } else if (event.code === this.settings.keyBindings.speedDown && event.shiftKey) {
       // Shift + speed down key - decrease speed
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      this.adjustPlaybackRate(-0.05);
+      this.adjustPlaybackRate(-0.01); // Smaller steps for finer control
     } else if (event.code === this.settings.keyBindings.toggleMetronome && event.shiftKey) {
       // Shift + M - toggle metronome
       event.preventDefault();
@@ -293,17 +328,17 @@ class PunchLooper {
       event.stopImmediatePropagation();
       this.toggleMetronome();
     } else if (event.code === this.settings.keyBindings.pitchUp && event.shiftKey) {
-      // Shift + pitch up key - pitch up half step
+      // Shift + pitch up key - pitch up 1 chromatic step
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      this.adjustPitch(0.5);
+      this.adjustPitch(1); // 1 semitone steps for discrete positions
     } else if (event.code === this.settings.keyBindings.pitchDown && event.shiftKey) {
-      // Shift + pitch down key - pitch down half step
+      // Shift + pitch down key - pitch down 1 chromatic step
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      this.adjustPitch(-0.5);
+      this.adjustPitch(-1); // 1 semitone steps for discrete positions
     } else if (event.code === this.settings.keyBindings.resetPitch && event.shiftKey) {
       // Shift + reset key - reset pitch and speed
       event.preventDefault();
@@ -341,17 +376,17 @@ class PunchLooper {
       event.stopImmediatePropagation();
       this.toggleAudioEngine();
     } else if (event.code === 'ArrowLeft' && event.shiftKey) {
-      // Shift + Left Arrow - fine pitch down (0.1 semitone)
+      // Shift + Left Arrow - pitch down 1 chromatic step
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      this.adjustPitch(-0.1);
+      this.adjustPitch(-1);
     } else if (event.code === 'ArrowRight' && event.shiftKey) {
-      // Shift + Right Arrow - fine pitch up (0.1 semitone)
+      // Shift + Right Arrow - pitch up 1 chromatic step
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      this.adjustPitch(0.1);
+      this.adjustPitch(1);
     } else if (event.code === 'KeyG' && event.shiftKey) {
       // Shift + G - toggle guitar pedal GUI
       event.preventDefault();
@@ -396,8 +431,12 @@ class PunchLooper {
       return;
     }
     
-    this.state.pointA = this.state.activeMedia.currentTime;
-    console.log('Set Point A at:', this.state.pointA);
+    // Apply pre-trim offset when setting point A
+    let adjustedTime = this.state.activeMedia.currentTime + (this.settings.pointAPreTrim / 1000);
+    adjustedTime = Math.max(0, adjustedTime); // Don't go negative
+    
+    this.state.pointA = adjustedTime;
+    console.log(`Set Point A at: ${this.state.pointA} (original: ${this.state.activeMedia.currentTime}, pre-trim: ${this.settings.pointAPreTrim}ms)`);
     const timeStr = this.formatTime(this.state.pointA);
     this.showHUD(`A @ ${timeStr}`, 700);
   }
@@ -405,8 +444,16 @@ class PunchLooper {
   private setPointB(): void {
     if (!this.state.activeMedia || this.state.pointA === null) return;
     
-    this.state.pointB = this.state.activeMedia.currentTime;
-    console.log('Set Point B at:', this.state.pointB);
+    // Apply pre-trim then post-trim offsets when setting point B
+    let adjustedTime = this.state.activeMedia.currentTime + (this.settings.pointBPreTrim / 1000);
+    adjustedTime = Math.max(0, adjustedTime); // Don't go negative
+    
+    // Apply post-trim (default 150ms back to fix loop timing)
+    adjustedTime += (this.settings.pointBPostTrim / 1000);
+    adjustedTime = Math.max(0, adjustedTime);
+    
+    this.state.pointB = adjustedTime;
+    console.log(`Set Point B at: ${this.state.pointB} (original: ${this.state.activeMedia.currentTime}, pre-trim: ${this.settings.pointBPreTrim}ms, post-trim: ${this.settings.pointBPostTrim}ms)`);
     console.log('Loop length:', this.state.pointB - this.state.pointA, 'seconds');
     
     if (this.state.pointB <= this.state.pointA) {
@@ -418,6 +465,9 @@ class PunchLooper {
     const timeStr = this.formatTime(this.state.pointB);
     const lengthStr = this.formatTime(this.state.pointB - this.state.pointA);
     this.showHUD(`B @ ${timeStr} (len=${lengthStr})`, 700);
+    
+    // Auto-start looping
+    this.startLoop();
   }
 
   private startLoop(): void {
@@ -507,22 +557,21 @@ class PunchLooper {
   private adjustPlaybackRate(delta: number): void {
     if (!this.state.activeMedia) return;
 
-    // Find current interval index
-    let currentIndex = this.musicalIntervals.findIndex(interval => interval.semitones === this.state.currentSemitoneShift);
-    if (currentIndex === -1) currentIndex = 7; // Default to original pitch
-
-    // Move to next interval
-    const direction = delta > 0 ? -1 : 1; // Negative delta = speed up = higher pitch = lower index
-    const newIndex = Math.max(0, Math.min(this.musicalIntervals.length - 1, currentIndex + direction));
+    // Update speed multiplier (clamp between 0.5x and 1.5x) with noon = 1.0x
+    this.state.currentSpeedMultiplier = Math.max(0.5, Math.min(1.5, this.state.currentSpeedMultiplier + delta));
     
-    const newInterval = this.musicalIntervals[newIndex];
-    this.state.currentSemitoneShift = newInterval.semitones;
+    // Use native browser capabilities for pitch-preserving speed control
+    this.state.activeMedia.preservesPitch = true;
+    this.state.activeMedia.playbackRate = this.state.currentSpeedMultiplier;
     
-    // Apply the musical interval
-    this.state.activeMedia.playbackRate = newInterval.rate;
-    this.setPitchPreservation(false); // Disable pitch preservation to allow musical intervals
+    const speedPercentage = Math.round(this.state.currentSpeedMultiplier * 100);
+    this.showHUD(`Speed: ${speedPercentage}% (×${this.state.currentSpeedMultiplier.toFixed(2)})`, 1000);
     
-    this.showHUD(`${newInterval.name} (×${newInterval.rate.toFixed(3)})`, 1200);
+    console.log(`[PunchLooper] Speed adjusted to ${this.state.currentSpeedMultiplier.toFixed(3)}x (pitch preserved)`);
+    
+    // Update speed knob rotation
+    this.updateKnobRotation('speed');
+    this.updateGUILEDs();
   }
 
   private setPitchPreservation(preserve: boolean): void {
@@ -540,8 +589,75 @@ class PunchLooper {
   }
 
   private adjustPitch(semitones: number): void {
-    // This now does the same as adjustPlaybackRate - musical intervals
-    this.adjustPlaybackRate(semitones > 0 ? 0.01 : -0.01);
+    if (!this.state.activeMedia) return;
+
+    // Update pitch shift value (clamp between -12 and +12 semitones)
+    this.state.currentPitchShift = Math.max(-12, Math.min(12, this.state.currentPitchShift + semitones));
+    
+    this.applyPitchShift();
+  }
+
+  private adjustPitchSmooth(delta: number): void {
+    if (!this.state.activeMedia) return;
+
+    // Smooth pitch adjustment that snaps to chromatic positions
+    let newPitch = this.state.currentPitchShift + delta;
+    
+    // Clamp to -6 to +6 semitones range
+    newPitch = Math.max(-6, Math.min(6, newPitch));
+    
+    // Round to nearest chromatic step (integer semitone)
+    const snappedPitch = Math.round(newPitch);
+    
+    // Always update the pitch (even if same value) to provide visual feedback
+    this.state.currentPitchShift = snappedPitch;
+    this.applyPitchShift();
+  }
+
+  private applyPitchShift(): void {
+    if (!this.state.activeMedia) return;
+    
+    // Calculate pitch ratio from semitones
+    const pitchRatio = this.semitoneToRatio(this.state.currentPitchShift);
+    
+    // For pitch changes, disable preservesPitch and combine with speed
+    this.state.activeMedia.preservesPitch = false;
+    
+    // Apply ONLY pitch change - don't modify speed
+    const combinedRate = pitchRatio * this.state.currentSpeedMultiplier;
+    this.state.activeMedia.playbackRate = combinedRate;
+    
+    const pitchName = this.getPitchShiftName(this.state.currentPitchShift);
+    this.showHUD(`Pitch: ${pitchName}`, 1000);
+    
+    console.log(`[PunchLooper] Pitch: ${this.state.currentPitchShift} semitones, Speed: ${this.state.currentSpeedMultiplier}x, Combined: ${combinedRate.toFixed(3)}x`);
+    
+    // Update pitch knob rotation
+    this.updateKnobRotation('pitch');
+    this.updateGUILEDs();
+  }
+
+  private getPitchShiftName(semitones: number): string {
+    if (semitones === 0) return 'Original pitch';
+    const direction = semitones > 0 ? 'up' : 'down';
+    const abs = Math.abs(semitones);
+    const octaves = Math.floor(abs / 12);
+    const remainder = abs % 12;
+    
+    let name = '';
+    if (octaves > 0) {
+      name += `${octaves} octave${octaves > 1 ? 's' : ''} `;
+    }
+    if (remainder > 0) {
+      name += `${remainder} semitone${remainder > 1 ? 's' : ''} `;
+    }
+    return name.trim() + ` ${direction}`;
+  }
+
+  private getIntervalForSemitones(semitones: number): { semitones: number; name: string; rate: number } {
+    // Find the closest musical interval for fallback
+    const interval = this.musicalIntervals.find(i => i.semitones === semitones);
+    return interval || { semitones: 0, name: 'Original pitch', rate: 1.0 };
   }
 
   private toggleAudioEngine(): void {
@@ -552,11 +668,17 @@ class PunchLooper {
   private resetPlaybackSettings(): void {
     if (!this.state.activeMedia) return;
 
+    // Reset both pitch and speed to defaults
     this.state.currentSemitoneShift = 0;
-    this.state.activeMedia.playbackRate = 1.0;
-    this.setPitchPreservation(false);
+    this.state.currentPitchShift = 0;
+    this.state.currentSpeedMultiplier = 1.0;
     
-    this.showHUD('Pitch/tempo reset to original', 700);
+    // Reset to normal playback
+    this.state.activeMedia.playbackRate = 1.0;
+    this.state.activeMedia.preservesPitch = true; // Default to pitch preservation
+    
+    this.showHUD('Pitch and speed reset to original', 700);
+    console.log('[PunchLooper] Playback settings reset to defaults');
     
     // Update both knob positions to center (reset position)
     this.updateKnobRotation('pitch');
@@ -1160,6 +1282,11 @@ class PunchLooper {
       this.state.guiElement.style.transform = 'scale(1) translateY(0)';
       this.state.guiElement.style.pointerEvents = 'auto';
       this.showHUD('Guitar pedal GUI shown (Shift+G)', 1000);
+      
+      // Initialize native audio controls when GUI is shown
+      if (this.state.activeMedia) {
+        this.initializeNativeAudioControls();
+      }
     } else {
       this.state.guiElement.style.opacity = '0';
       this.state.guiElement.style.transform = 'scale(0.9) translateY(20px)';
@@ -1227,17 +1354,24 @@ class PunchLooper {
     if (!this.state.isDraggingKnob) return;
 
     const deltaY = e.movementY;
-    const sensitivity = 0.5;
     
     switch (this.state.isDraggingKnob) {
       case 'pitch':
-        this.adjustPitch(-deltaY * sensitivity * 0.1); // Fine control
+        // Direct chromatic stepping - more responsive
+        const pitchSensitivity = 0.1; // Higher sensitivity
+        const pitchDelta = -deltaY * pitchSensitivity;
+        if (Math.abs(pitchDelta) >= 0.2) { // Lower threshold for easier stepping
+          const step = pitchDelta > 0 ? 1 : -1;
+          this.adjustPitch(step);
+        }
         break;
       case 'speed':
-        this.adjustPlaybackRate(-deltaY * sensitivity * 0.01);
+        // Smooth speed control: 0.5x to 1.5x with noon = 1.0x
+        const speedSensitivity = 0.002; // Keep same sensitivity
+        this.adjustPlaybackRate(-deltaY * speedSensitivity);
         break;
       case 'volume':
-        this.adjustVolume(-deltaY * sensitivity * 0.02);
+        this.adjustVolume(-deltaY * 0.005);
         break;
     }
     
@@ -1261,10 +1395,14 @@ class PunchLooper {
     
     switch (param) {
       case 'pitch':
+        // 13 discrete positions: -6 to +6 semitones = -150° to +150°
+        angle = (this.state.currentPitchShift / 6) * 150;
+        break;
       case 'speed':
-        // Both knobs now control the same musical interval
-        // Map semitone shift to knob rotation: -12 to +12 semitones = -150° to +150°
-        angle = (this.state.currentSemitoneShift / 12) * 150;
+        // Speed range 0.5x to 1.5x with noon (0°) = 1.0x
+        // Map: 0.5x to -150°, 1.0x to 0°, 1.5x to +150°
+        const normalizedSpeed = (this.state.currentSpeedMultiplier - 1.0) / 0.5; // -1 to +1 range
+        angle = normalizedSpeed * 150; // Map to -150° to +150°
         break;
       case 'volume':
         // Volume not implemented yet, keep at 0
@@ -1365,19 +1503,31 @@ class PunchLooper {
   }
 
 
-  private async initializeAudioProcessing(): Promise<void> {
-    // Not needed anymore - using simple musical intervals with playback rate
-    this.showHUD('Using natural musical intervals', 1000);
+  private initializeNativeAudioControls(): void {
+    if (!this.state.activeMedia) return;
+    
+    // Set up native browser audio controls
+    this.state.activeMedia.preservesPitch = true; // Enable pitch preservation by default
+    this.state.activeMedia.playbackRate = 1.0;
+    
+    // Reset state values
+    this.state.currentPitchShift = 0;
+    this.state.currentSpeedMultiplier = 1.0;
+    
+    this.showHUD('Native audio controls initialized', 800);
+    console.log('[PunchLooper] Native audio controls initialized');
   }
 
   private cleanupAudioProcessing(): void {
-    // Not needed anymore - we're using simple playback rate
+    // Reset media element to defaults when switching
+    if (this.state.activeMedia) {
+      this.state.activeMedia.playbackRate = 1.0;
+      this.state.activeMedia.preservesPitch = true;
+      console.log('[PunchLooper] Audio settings reset to defaults');
+    }
   }
 
-  private createPitchShiftProcessor(): string {
-    // Not needed anymore - using simple musical intervals
-    return '';
-  }
+  // Removed createPitchShiftProcessor - using native browser capabilities
 
   public destroy(): void {
     this.stopLoop();

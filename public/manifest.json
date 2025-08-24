@@ -24,6 +24,12 @@
       "run_at": "document_idle"
     }
   ],
+  "web_accessible_resources": [
+    {
+      "resources": ["lib/soundtouch.min.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "options_page": "options.html",
   "icons": {
     "16": "icons/icon-16.png",
