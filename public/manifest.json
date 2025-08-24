@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Punch Looper",
+  "name": "YT Looper",
   "description": "Tap in, tap out, and loop any HTML5 audio/video instantly.",
   "version": "1.0.0",
   "permissions": ["storage", "scripting"],

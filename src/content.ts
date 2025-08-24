@@ -10,6 +10,7 @@ interface LooperSettings {
   pointAPostTrim: number;
   pointBPreTrim: number;
   pointBPostTrim: number;
+  jogAdjustmentMs: number;
   keyBindings: {
     setPointA: string;
     setPointB: string;
@@ -55,7 +56,7 @@ interface LooperState {
 class PunchLooper {
   private settings: LooperSettings = {
     looperKey: 'BracketLeft', // Legacy - not used anymore
-    latencyCompensation: 50,
+    latencyCompensation: 0,
     epsilon: 50,
     enableHoldToDefine: false,
     edgeBleed: 100,
@@ -64,7 +65,8 @@ class PunchLooper {
     pointAPreTrim: 0,
     pointAPostTrim: 0,
     pointBPreTrim: 0,
-    pointBPostTrim: 150,
+    pointBPostTrim: 100,
+    jogAdjustmentMs: 50,
     keyBindings: {
       setPointA: 'BracketLeft',
       setPointB: 'BracketRight', 
@@ -456,10 +458,10 @@ class PunchLooper {
     console.log(`Set Point B at: ${this.state.pointB} (original: ${this.state.activeMedia.currentTime}, pre-trim: ${this.settings.pointBPreTrim}ms, post-trim: ${this.settings.pointBPostTrim}ms)`);
     console.log('Loop length:', this.state.pointB - this.state.pointA, 'seconds');
     
-    if (this.state.pointB <= this.state.pointA) {
-      this.showHUD('B must be after A', 1000);
-      this.state.pointB = null;
-      return;
+    // Allow overlapping points for creative looping
+    if (this.state.pointB <= this.state.pointA - 0.5) {
+      // If B is significantly before A (more than 0.5 seconds), warn but allow it
+      this.showHUD('⚠ Overlapped loop (B before A)', 1000);
     }
 
     const timeStr = this.formatTime(this.state.pointB);
@@ -527,15 +529,30 @@ class PunchLooper {
         this.handleMetronomeClick(currentTime, loopLength);
       }
       
-      // Check if we've passed point B + edge bleed
-      const effectivePointB = this.state.pointB + (this.settings.edgeBleed / 1000);
-      const effectivePointA = Math.max(0, this.state.pointA - (this.settings.edgeBleed / 1000));
+      // Handle both normal and overlapped loops
+      let effectivePointB: number;
+      let effectivePointA: number;
       
-      if (currentTime >= effectivePointB) {
-        console.log(`Hit point B+bleed (${effectivePointB.toFixed(3)}), jumping back to A-bleed (${effectivePointA.toFixed(3)})`);
+      if (this.state.pointB > this.state.pointA) {
+        // Normal loop: A -> B
+        const bleedCompensation = (this.settings.edgeBleed / 1000) * 0.5;
+        effectivePointB = this.state.pointB - bleedCompensation;
+        effectivePointA = Math.max(0, this.state.pointA - (this.settings.edgeBleed / 1000));
+      } else {
+        // Overlapped loop: A -> end, start -> B (creates tighter loop)
+        effectivePointB = this.state.pointB + (this.settings.edgeBleed / 1000);
+        effectivePointA = Math.max(0, this.state.pointA - (this.settings.edgeBleed / 1000));
+      }
+      
+      const shouldLoop = (this.state.pointB > this.state.pointA && currentTime >= effectivePointB) ||
+                        (this.state.pointB <= this.state.pointA && (currentTime >= effectivePointA || currentTime <= effectivePointB));
+      
+      if (shouldLoop) {
+        console.log(`Loop boundary hit: ${currentTime.toFixed(3)} -> A (${effectivePointA.toFixed(3)})`);
         
-        // Seek to point A with edge bleed for smoother transition
-        this.state.activeMedia.currentTime = effectivePointA;
+        // Apply latency compensation for more precise looping (negative latency moves forward)
+        const jumpTarget = effectivePointA - (this.settings.latencyCompensation / 1000);
+        this.state.activeMedia.currentTime = Math.max(0, jumpTarget);
 
         // Ensure playback continues after seek
         if (this.state.activeMedia.paused) {
@@ -771,7 +788,7 @@ class PunchLooper {
       return;
     }
 
-    const adjustment = direction === 'forward' ? 0.05 : -0.05;
+    const adjustment = (direction === 'forward' ? 1 : -1) * (this.settings.jogAdjustmentMs / 1000);
 
     if (point === 'A') {
       const newPointA = Math.max(0, this.state.pointA + adjustment);
@@ -795,47 +812,155 @@ class PunchLooper {
 
   private createHUD(): void {
     console.log('createHUD called');
-    const hud = document.createElement('div');
-    hud.id = 'punch-looper-hud';
-    hud.style.cssText = `
+    
+    // Create container
+    const container = document.createElement('div');
+    container.id = 'punch-looper-hud-container';
+    container.style.cssText = `
       position: fixed !important;
       top: 20px !important;
       right: 20px !important;
-      background: rgba(0, 0, 0, 0.85) !important;
-      color: white !important;
-      padding: 8px 12px !important;
-      border-radius: 6px !important;
+      background: rgba(20, 20, 20, 0.95) !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+      border-radius: 8px !important;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+      z-index: 2147483647 !important;
+      opacity: 0 !important;
+      transition: opacity 0.2s ease-out !important;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
+      backdrop-filter: blur(10px) !important;
+      min-width: 220px !important;
+      user-select: none !important;
+    `;
+    
+    // Title bar
+    const titleBar = document.createElement('div');
+    titleBar.style.cssText = `
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      padding: 6px 10px !important;
+      background: rgba(30, 30, 30, 0.8) !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+      border-radius: 8px 8px 0 0 !important;
+      cursor: move !important;
+    `;
+    
+    // Title and controls container
+    const titleContent = document.createElement('div');
+    titleContent.style.cssText = `
+      display: flex !important;
+      align-items: center !important;
+      gap: 8px !important;
+      flex: 1 !important;
+    `;
+    
+    // Title
+    const title = document.createElement('span');
+    title.textContent = 'YT Looper';
+    title.style.cssText = `
+      color: #999 !important;
+      font-size: 11px !important;
+      font-weight: 600 !important;
+      letter-spacing: 0.5px !important;
+    `;
+    
+    // Settings button
+    const settingsBtn = document.createElement('button');
+    settingsBtn.innerHTML = '⚙';
+    settingsBtn.style.cssText = `
+      background: none !important;
+      border: none !important;
+      color: #666 !important;
+      cursor: pointer !important;
+      padding: 0 4px !important;
+      font-size: 14px !important;
+      transition: color 0.2s !important;
+    `;
+    settingsBtn.onmouseover = () => settingsBtn.style.color = '#fff !important';
+    settingsBtn.onmouseout = () => settingsBtn.style.color = '#666 !important';
+    settingsBtn.onclick = (e) => {
+      e.stopPropagation();
+      this.showSettingsModal();
+    };
+    
+    titleContent.appendChild(title);
+    titleContent.appendChild(settingsBtn);
+    
+    // Close button
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '×';
+    closeBtn.style.cssText = `
+      background: none !important;
+      border: none !important;
+      color: #666 !important;
+      cursor: pointer !important;
+      padding: 0 4px !important;
+      font-size: 20px !important;
+      line-height: 1 !important;
+      transition: color 0.2s !important;
+    `;
+    closeBtn.onmouseover = () => closeBtn.style.color = '#ff4444 !important';
+    closeBtn.onmouseout = () => closeBtn.style.color = '#666 !important';
+    closeBtn.onclick = (e) => {
+      e.stopPropagation();
+      this.hideHUD();
+    };
+    
+    titleBar.appendChild(titleContent);
+    titleBar.appendChild(closeBtn);
+    
+    // Message area
+    const messageArea = document.createElement('div');
+    messageArea.id = 'punch-looper-hud';
+    messageArea.style.cssText = `
+      padding: 10px 14px !important;
+      color: #fff !important;
       font-size: 13px !important;
       font-weight: 500 !important;
-      z-index: 2147483647 !important;
-      pointer-events: none !important;
-      opacity: 0 !important;
-      transform: translateY(-10px) !important;
-      transition: all 0.2s ease-out !important;
-      border: 1px solid rgba(255, 255, 255, 0.2) !important;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
-      backdrop-filter: blur(8px) !important;
+      min-height: 20px !important;
       white-space: nowrap !important;
     `;
     
-    // Test visibility immediately
-    hud.textContent = 'TEST HUD';
-    hud.style.opacity = '1';
-    hud.style.transform = 'translateY(0)';
+    container.appendChild(titleBar);
+    container.appendChild(messageArea);
+    document.body.appendChild(container);
     
-    document.body.appendChild(hud);
-    this.state.hudElement = hud;
+    this.state.hudElement = messageArea;
     
-    console.log('HUD created and added to DOM:', hud);
+    // Make draggable by title bar only
+    this.makeDraggable(container, titleBar);
     
-    // Hide test text after 2 seconds
-    setTimeout(() => {
-      if (this.state.hudElement) {
-        this.state.hudElement.style.opacity = '0';
-        this.state.hudElement.style.transform = 'translateY(-10px)';
+    console.log('HUD created and added to DOM');
+  }
+  
+  private makeDraggable(element: HTMLElement, handle: HTMLElement): void {
+    let isDragging = false;
+    let currentX = 0;
+    let currentY = 0;
+    let initialX = 0;
+    let initialY = 0;
+
+    handle.addEventListener('mousedown', (e: MouseEvent) => {
+      if (e.target === handle || (e.target as HTMLElement).tagName === 'SPAN') {
+        initialX = e.clientX - currentX;
+        initialY = e.clientY - currentY;
+        isDragging = true;
       }
-    }, 2000);
+    });
+
+    document.addEventListener('mousemove', (e: MouseEvent) => {
+      if (isDragging) {
+        e.preventDefault();
+        currentX = e.clientX - initialX;
+        currentY = e.clientY - initialY;
+        element.style.transform = `translate(${currentX}px, ${currentY}px)`;
+      }
+    });
+
+    document.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
   }
 
   private showHUD(message: string, duration: number): void {
@@ -846,11 +971,14 @@ class PunchLooper {
       return;
     }
 
-    this.state.hudElement.textContent = message;
-    this.state.hudElement.style.opacity = '1';
-    this.state.hudElement.style.transform = 'translateY(0)';
+    const container = document.getElementById('punch-looper-hud-container');
+    if (container) {
+      container.style.opacity = '1';
+    }
     
-    console.log('HUD updated - opacity:', this.state.hudElement.style.opacity, 'text:', this.state.hudElement.textContent);
+    this.state.hudElement.textContent = message;
+    
+    console.log('HUD updated - text:', this.state.hudElement.textContent);
 
     if (this.state.hudTimeout) {
       clearTimeout(this.state.hudTimeout);
@@ -938,6 +1066,8 @@ class PunchLooper {
     const latencyValue = modal.querySelector('#latency-value') as HTMLElement;
     const bleedSlider = modal.querySelector('#bleed-slider') as HTMLInputElement;
     const bleedValue = modal.querySelector('#bleed-value') as HTMLElement;
+    const jogSlider = modal.querySelector('#jog-slider') as HTMLInputElement;
+    const jogValue = modal.querySelector('#jog-value') as HTMLElement;
 
     latencySlider.addEventListener('input', () => {
       latencyValue.textContent = `${latencySlider.value}ms`;
@@ -945,6 +1075,10 @@ class PunchLooper {
 
     bleedSlider.addEventListener('input', () => {
       bleedValue.textContent = `${bleedSlider.value}ms`;
+    });
+
+    jogSlider?.addEventListener('input', () => {
+      jogValue.textContent = `${jogSlider.value}ms`;
     });
 
     // Close modal
@@ -969,11 +1103,13 @@ class PunchLooper {
     modal.querySelector('#save-settings')?.addEventListener('click', async () => {
       this.settings.latencyCompensation = parseInt(latencySlider.value);
       this.settings.edgeBleed = parseInt(bleedSlider.value);
+      this.settings.jogAdjustmentMs = parseInt(jogSlider.value);
 
       try {
         await chrome.storage.sync.set({
           latencyCompensation: this.settings.latencyCompensation,
-          edgeBleed: this.settings.edgeBleed
+          edgeBleed: this.settings.edgeBleed,
+          jogAdjustmentMs: this.settings.jogAdjustmentMs
         });
         this.showHUD('Settings saved!', 1000);
         closeModal();
@@ -987,8 +1123,10 @@ class PunchLooper {
   private hideHUD(): void {
     if (!this.state.hudElement) return;
 
-    this.state.hudElement.style.opacity = '0';
-    this.state.hudElement.style.transform = 'translateY(-10px)';
+    const container = document.getElementById('punch-looper-hud-container');
+    if (container) {
+      container.style.opacity = '0';
+    }
   }
 
   private createGUI(): void {
@@ -1424,7 +1562,7 @@ class PunchLooper {
       return;
     }
 
-    const adjustment = 0.05; // 50ms adjustment
+    const adjustment = this.settings.jogAdjustmentMs / 1000; // Convert ms to seconds
 
     switch (action) {
       case 'a-back':
