@@ -848,6 +848,7 @@ class PunchLooper {
     
     // Title and controls container
     const titleContent = document.createElement('div');
+    titleContent.className = 'title-content';
     titleContent.style.cssText = `
       display: flex !important;
       align-items: center !important;
@@ -942,10 +943,13 @@ class PunchLooper {
     let initialY = 0;
 
     handle.addEventListener('mousedown', (e: MouseEvent) => {
-      if (e.target === handle || (e.target as HTMLElement).tagName === 'SPAN') {
+      // Only allow dragging on the title bar itself, not buttons
+      const target = e.target as HTMLElement;
+      if (target === handle || target.tagName === 'SPAN' && target.closest('.title-content')) {
         initialX = e.clientX - currentX;
         initialY = e.clientY - currentY;
         isDragging = true;
+        e.preventDefault();
       }
     });
 
@@ -964,30 +968,24 @@ class PunchLooper {
   }
 
   private showHUD(message: string, duration: number): void {
-    console.log('showHUD called:', message, 'duration:', duration, 'hudElement:', !!this.state.hudElement);
+    console.log('showHUD called:', message, 'duration:', duration);
     
-    if (!this.state.hudElement) {
-      console.error('HUD element is null!');
-      return;
-    }
+    // Display on the pedal GUI instead of separate HUD
+    const timeDisplay = document.getElementById('time-display');
+    if (timeDisplay) {
+      timeDisplay.textContent = message;
+      
+      if (this.state.hudTimeout) {
+        clearTimeout(this.state.hudTimeout);
+      }
 
-    const container = document.getElementById('punch-looper-hud-container');
-    if (container) {
-      container.style.opacity = '1';
-    }
-    
-    this.state.hudElement.textContent = message;
-    
-    console.log('HUD updated - text:', this.state.hudElement.textContent);
-
-    if (this.state.hudTimeout) {
-      clearTimeout(this.state.hudTimeout);
-    }
-
-    if (duration > 0) {
-      this.state.hudTimeout = window.setTimeout(() => {
-        this.hideHUD();
-      }, duration);
+      if (duration > 0) {
+        this.state.hudTimeout = window.setTimeout(() => {
+          timeDisplay.textContent = 'YT Looper Ready';
+        }, duration);
+      }
+    } else {
+      console.warn('Time display element not found on pedal GUI');
     }
   }
 
@@ -1219,6 +1217,10 @@ class PunchLooper {
         <circle cx="140" cy="45" r="4" fill="#333" stroke="#666" stroke-width="1"/>
         <circle cx="140" cy="45" r="2" fill="#000"/>
         <text x="140" y="60" text-anchor="middle" fill="#888" font-size="6">IN 2</text>
+        
+        <!-- Time Display Area at top -->
+        <rect x="10" y="25" width="150" height="18" rx="3" fill="#000" stroke="#444" stroke-width="1"/>
+        <text x="85" y="37" text-anchor="middle" fill="#00ff00" font-size="11" font-family="monospace" id="time-display" class="time-display">YT Looper Ready</text>
         
         <!-- Status LEDs horizontally below knobs -->
         <circle cx="30" cy="145" r="4" fill="${this.state.pointA ? 'url(#greenLED)' : '#002200'}" class="led-a" stroke="#333" stroke-width="1"/>
