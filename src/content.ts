@@ -947,11 +947,30 @@ class PunchLooper {
   }
   
   private makeDraggable(element: HTMLElement, handle: HTMLElement): void {
-    let isDragging = false;
+    let isDraggingHUD = false;
     let currentX = 0;
     let currentY = 0;
     let initialX = 0;
     let initialY = 0;
+    
+    // Define the event handlers as named functions so they can be removed
+    const hudMouseMove = (e: MouseEvent) => {
+      if (isDraggingHUD) {
+        e.preventDefault();
+        e.stopPropagation(); // Prevent interference with other drag handlers
+        currentX = e.clientX - initialX;
+        currentY = e.clientY - initialY;
+        element.style.transform = `translate(${currentX}px, ${currentY}px)`;
+      }
+    };
+    
+    const hudMouseUp = () => {
+      if (isDraggingHUD) {
+        isDraggingHUD = false;
+        document.removeEventListener('mousemove', hudMouseMove);
+        document.removeEventListener('mouseup', hudMouseUp);
+      }
+    };
 
     handle.addEventListener('mousedown', (e: MouseEvent) => {
       // Only allow dragging on the title bar itself, not buttons
@@ -959,22 +978,15 @@ class PunchLooper {
       if (target === handle || target.tagName === 'SPAN' && target.closest('.title-content')) {
         initialX = e.clientX - currentX;
         initialY = e.clientY - currentY;
-        isDragging = true;
+        isDraggingHUD = true;
+        
+        // Add event listeners only when dragging starts
+        document.addEventListener('mousemove', hudMouseMove);
+        document.addEventListener('mouseup', hudMouseUp);
+        
         e.preventDefault();
+        e.stopPropagation(); // Prevent interference with other drag handlers
       }
-    });
-
-    document.addEventListener('mousemove', (e: MouseEvent) => {
-      if (isDragging) {
-        e.preventDefault();
-        currentX = e.clientX - initialX;
-        currentY = e.clientY - initialY;
-        element.style.transform = `translate(${currentX}px, ${currentY}px)`;
-      }
-    });
-
-    document.addEventListener('mouseup', () => {
-      isDragging = false;
     });
   }
 
@@ -1265,31 +1277,15 @@ class PunchLooper {
 
     // Add drag functionality to modal header only
     const modalHeader = modal.querySelector('#modal-header');
-    let isDragging = false;
-    let dragOffset = { x: 0, y: 0 };
-
-    modalHeader?.addEventListener('mousedown', (e) => {
-      // Don't start drag if clicking on close button
-      if ((e.target as Element).closest('#close-settings')) return;
+    let isDraggingModal = false;
+    let modalDragOffset = { x: 0, y: 0 };
+    
+    // Define the event handlers as named functions so they can be removed
+    const modalMouseMove = (e: MouseEvent) => {
+      if (!isDraggingModal) return;
       
-      isDragging = true;
-      const modalRect = modal.getBoundingClientRect();
-      dragOffset.x = e.clientX - modalRect.left;
-      dragOffset.y = e.clientY - modalRect.top;
-      
-      modal.style.position = 'fixed';
-      modal.style.top = modalRect.top + 'px';
-      modal.style.left = modalRect.left + 'px';
-      modal.style.transform = 'none';
-      
-      e.preventDefault();
-    });
-
-    document.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      
-      const newLeft = e.clientX - dragOffset.x;
-      const newTop = e.clientY - dragOffset.y;
+      const newLeft = e.clientX - modalDragOffset.x;
+      const newTop = e.clientY - modalDragOffset.y;
       
       // Keep modal within viewport bounds
       const maxLeft = window.innerWidth - modal.offsetWidth;
@@ -1297,12 +1293,38 @@ class PunchLooper {
       
       modal.style.left = Math.max(0, Math.min(maxLeft, newLeft)) + 'px';
       modal.style.top = Math.max(0, Math.min(maxTop, newTop)) + 'px';
-    });
-
-    document.addEventListener('mouseup', () => {
-      if (isDragging) {
-        isDragging = false;
+      
+      e.stopPropagation(); // Prevent interference with other drag handlers
+    };
+    
+    const modalMouseUp = () => {
+      if (isDraggingModal) {
+        isDraggingModal = false;
+        document.removeEventListener('mousemove', modalMouseMove);
+        document.removeEventListener('mouseup', modalMouseUp);
       }
+    };
+
+    modalHeader?.addEventListener('mousedown', (e) => {
+      // Don't start drag if clicking on close button
+      if ((e.target as Element).closest('#close-settings')) return;
+      
+      isDraggingModal = true;
+      const modalRect = modal.getBoundingClientRect();
+      modalDragOffset.x = e.clientX - modalRect.left;
+      modalDragOffset.y = e.clientY - modalRect.top;
+      
+      modal.style.position = 'fixed';
+      modal.style.top = modalRect.top + 'px';
+      modal.style.left = modalRect.left + 'px';
+      modal.style.transform = 'none';
+      
+      // Add event listeners only when dragging starts
+      document.addEventListener('mousemove', modalMouseMove);
+      document.addEventListener('mouseup', modalMouseUp);
+      
+      e.preventDefault();
+      e.stopPropagation(); // Prevent interference with other drag handlers
     });
 
     // Reset defaults
@@ -1740,8 +1762,25 @@ class PunchLooper {
     }
 
     // Make entire GUI draggable (except when clicking interactive elements)
-    let isDragging = false;
-    let dragOffset = { x: 0, y: 0 };
+    let isDraggingGUI = false;
+    let guiDragOffset = { x: 0, y: 0 };
+    
+    // Define the event handlers as named functions so they can be removed
+    const guiMouseMove = (e: MouseEvent) => {
+      if (!isDraggingGUI) return;
+      gui.style.right = `${window.innerWidth - e.clientX - guiDragOffset.x}px`;
+      gui.style.bottom = `${window.innerHeight - e.clientY - guiDragOffset.y}px`;
+      e.stopPropagation(); // Prevent interference with other drag handlers
+    };
+    
+    const guiMouseUp = () => {
+      if (isDraggingGUI) {
+        isDraggingGUI = false;
+        gui.style.cursor = '';
+        document.removeEventListener('mousemove', guiMouseMove);
+        document.removeEventListener('mouseup', guiMouseUp);
+      }
+    };
 
     gui.addEventListener('mousedown', (e) => {
       // Don't drag if clicking on interactive elements
@@ -1749,24 +1788,15 @@ class PunchLooper {
       
       e.preventDefault();
       e.stopPropagation();
-      isDragging = true;
+      isDraggingGUI = true;
       const rect = gui.getBoundingClientRect();
-      dragOffset.x = e.clientX - rect.left;
-      dragOffset.y = e.clientY - rect.top;
+      guiDragOffset.x = e.clientX - rect.left;
+      guiDragOffset.y = e.clientY - rect.top;
       gui.style.cursor = 'grabbing';
-    });
-
-    document.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      gui.style.right = `${window.innerWidth - e.clientX - dragOffset.x}px`;
-      gui.style.bottom = `${window.innerHeight - e.clientY - dragOffset.y}px`;
-    });
-
-    document.addEventListener('mouseup', () => {
-      if (isDragging) {
-        isDragging = false;
-        gui.style.cursor = '';
-      }
+      
+      // Add event listeners only when dragging starts
+      document.addEventListener('mousemove', guiMouseMove);
+      document.addEventListener('mouseup', guiMouseUp);
     });
   }
 
