@@ -565,6 +565,9 @@ class PunchLooper {
         console.log('Seek completed, new currentTime:', this.state.activeMedia.currentTime);
       }
 
+      // Update GUI display
+      this.updateDisplayText();
+
       this.state.animationFrameId = requestAnimationFrame(tick);
     };
 
@@ -583,6 +586,9 @@ class PunchLooper {
     
     const speedPercentage = Math.round(this.state.currentSpeedMultiplier * 100);
     this.showHUD(`Speed: ${speedPercentage}% (×${this.state.currentSpeedMultiplier.toFixed(2)})`, 1000);
+    
+    // Update display immediately
+    this.updateDisplayText();
     
     console.log(`[PunchLooper] Speed adjusted to ${this.state.currentSpeedMultiplier.toFixed(3)}x (pitch preserved)`);
     
@@ -612,6 +618,9 @@ class PunchLooper {
     this.state.currentPitchShift = Math.max(-12, Math.min(12, this.state.currentPitchShift + semitones));
     
     this.applyPitchShift();
+    
+    // Update display immediately
+    this.updateDisplayText();
   }
 
   private adjustPitchSmooth(delta: number): void {
@@ -971,21 +980,31 @@ class PunchLooper {
     console.log('showHUD called:', message, 'duration:', duration);
     
     // Display on the pedal GUI instead of separate HUD
-    const timeDisplay = document.getElementById('time-display');
-    if (timeDisplay) {
-      timeDisplay.textContent = message;
-      
-      if (this.state.hudTimeout) {
-        clearTimeout(this.state.hudTimeout);
-      }
+    if (this.state.guiElement && this.state.isGuiVisible) {
+      const timeDisplay = this.state.guiElement.querySelector('#time-display');
+      if (timeDisplay) {
+        timeDisplay.textContent = message;
+        
+        if (this.state.hudTimeout) {
+          clearTimeout(this.state.hudTimeout);
+        }
 
-      if (duration > 0) {
-        this.state.hudTimeout = window.setTimeout(() => {
-          timeDisplay.textContent = 'YT Looper Ready';
-        }, duration);
+        if (duration > 0) {
+          this.state.hudTimeout = window.setTimeout(() => {
+            // Only update if GUI is still visible and element still exists
+            if (this.state.guiElement && this.state.isGuiVisible) {
+              const currentTimeDisplay = this.state.guiElement.querySelector('#time-display');
+              if (currentTimeDisplay && this.state.activeMedia) {
+                currentTimeDisplay.textContent = this.formatTime(this.state.activeMedia.currentTime);
+              }
+            }
+          }, duration);
+        }
       }
-    } else {
-      console.warn('Time display element not found on pedal GUI');
+    }
+    // If GUI is not visible, just log the message (fallback behavior)
+    else {
+      console.log('GUI not visible, message:', message);
     }
   }
 
@@ -1134,8 +1153,8 @@ class PunchLooper {
       position: fixed !important;
       bottom: 20px !important;
       right: 20px !important;
-      width: 200px !important;
-      height: 280px !important;
+      width: 160px !important;
+      height: 310px !important;
       z-index: 2147483646 !important;
       pointer-events: none !important;
       opacity: 0 !important;
@@ -1143,9 +1162,13 @@ class PunchLooper {
       transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
       user-select: none !important;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+      border-radius: 8px !important;
+      overflow: hidden !important;
+      background: linear-gradient(to bottom, #dd2222, #aa1111) !important;
+      box-shadow: 0 12px 24px rgba(0,0,0,0.4) !important;
     `;
 
-    gui.innerHTML = this.createPedalSVG();
+    gui.innerHTML = this.createPedalHTML();
     
     // Add event listeners for interaction
     this.setupGUIEventListeners(gui);
@@ -1154,9 +1177,45 @@ class PunchLooper {
     this.state.guiElement = gui;
   }
 
-  private createPedalSVG(): string {
+  private createPedalHTML(): string {
     return `
-      <svg viewBox="0 0 170 280" xmlns="http://www.w3.org/2000/svg" style="width: 100%; height: 100%; filter: drop-shadow(0 12px 24px rgba(0,0,0,0.4));">
+      <!-- Top drag bar -->
+      <div style="
+        width: 100%;
+        height: 30px;
+        background: linear-gradient(to bottom, #333, #222);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 10px;
+        box-sizing: border-box;
+        cursor: move;
+        border-bottom: 1px solid #111;
+      " class="drag-handle">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <svg width="20" height="20" class="hamburger-menu" style="cursor: pointer;">
+            <rect x="3" y="5" width="14" height="2" fill="#ccc"/>
+            <rect x="3" y="9" width="14" height="2" fill="#ccc"/>
+            <rect x="3" y="13" width="14" height="2" fill="#ccc"/>
+          </svg>
+          <span style="color: #fff; font-size: 12px; font-weight: bold;">YTLOOPER</span>
+        </div>
+        <button style="
+          background: #ff4444;
+          border: none;
+          color: white;
+          width: 20px;
+          height: 20px;
+          border-radius: 3px;
+          cursor: pointer;
+          font-weight: bold;
+          font-size: 16px;
+          line-height: 1;
+          padding: 0;
+        " class="close-button">×</button>
+      </div>
+      
+      <svg viewBox="0 0 150 280" xmlns="http://www.w3.org/2000/svg" style="width: 100%; height: 280px;">
         <!-- Boss RC-1 Style Compact Design -->
         <defs>
           <!-- Red pedal gradient -->
@@ -1195,134 +1254,128 @@ class PunchLooper {
           </radialGradient>
         </defs>
         
-        <!-- Main pedal body - Red and square -->
-        <rect x="10" y="20" width="150" height="240" rx="8" ry="8" 
-              fill="url(#redPedal)" 
-              stroke="#990000" stroke-width="2"/>
+        <!-- Main content area already has background from div -->
               
-        <!-- Top section with Boss branding -->
-        <rect x="20" y="30" width="130" height="40" rx="4" ry="4" 
+        <!-- Top section with time and A/B point display -->
+        <rect x="20" y="10" width="130" height="35" rx="4" ry="4" 
               fill="#111" 
               stroke="#333" stroke-width="1"/>
         
-        <!-- YTLOOPER branding -->
-        <text x="85" y="50" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold" font-family="Arial Black">YTLOOPER</text>
-        <text x="85" y="62" text-anchor="middle" fill="#aaa" font-size="8">Musical Loop Station</text>
+        <text x="75" y="20" text-anchor="middle" fill="#00ff00" font-size="10" font-family="monospace" id="time-display" class="time-display">00:00.000</text>
+        <text x="75" y="32" text-anchor="middle" fill="#00ff00" font-size="9" font-family="monospace" id="points-display" class="points-display">A:-- B:--</text>
+        <text x="75" y="42" text-anchor="middle" fill="#888" font-size="7" id="status-display" class="status-display">READY</text>
         
-        <!-- Input jacks -->
-        <circle cx="30" cy="45" r="4" fill="#333" stroke="#666" stroke-width="1"/>
-        <circle cx="30" cy="45" r="2" fill="#000"/>
-        <text x="30" y="60" text-anchor="middle" fill="#888" font-size="6">IN 1</text>
+        <!-- Three control knobs in a line -->
+        <!-- Volume knob -->
+        <g id="volume-knob" class="knob-group" data-param="volume" style="cursor: pointer;">
+          <circle cx="40" cy="80" r="15" fill="url(#chromeKnob)" stroke="#999" stroke-width="1"/>
+          <circle cx="40" cy="80" r="12" fill="#ddd"/>
+          <line x1="40" y1="70" x2="40" y2="75" stroke="#333" stroke-width="2" stroke-linecap="round" class="knob-pointer"/>
+          <text x="40" y="102" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">VOL</text>
+          <text x="40" y="112" text-anchor="middle" fill="#ccc" font-size="6">100%</text>
+        </g>
         
-        <circle cx="140" cy="45" r="4" fill="#333" stroke="#666" stroke-width="1"/>
-        <circle cx="140" cy="45" r="2" fill="#000"/>
-        <text x="140" y="60" text-anchor="middle" fill="#888" font-size="6">IN 2</text>
-        
-        <!-- Time Display Area at top -->
-        <rect x="10" y="25" width="150" height="18" rx="3" fill="#000" stroke="#444" stroke-width="1"/>
-        <text x="85" y="37" text-anchor="middle" fill="#00ff00" font-size="11" font-family="monospace" id="time-display" class="time-display">YT Looper Ready</text>
-        
-        <!-- Status LEDs horizontally below knobs -->
-        <circle cx="30" cy="145" r="4" fill="${this.state.pointA ? 'url(#greenLED)' : '#002200'}" class="led-a" stroke="#333" stroke-width="1"/>
-        <text x="30" y="158" text-anchor="middle" fill="#fff" font-size="7" font-weight="bold">A</text>
-        
-        <circle cx="60" cy="145" r="4" fill="${this.state.pointB ? 'url(#greenLED)' : '#002200'}" class="led-b" stroke="#333" stroke-width="1"/>
-        <text x="60" y="158" text-anchor="middle" fill="#fff" font-size="7" font-weight="bold">B</text>
-        
-        <circle cx="90" cy="145" r="5" fill="${this.state.isLooping ? 'url(#redLED)' : '#220000'}" class="led-loop" stroke="#333" stroke-width="1"/>
-        <text x="90" y="158" text-anchor="middle" fill="#fff" font-size="7" font-weight="bold">LOOP</text>
-        
-        <!-- Two control knobs side by side on left -->
         <!-- Pitch knob -->
         <g id="pitch-knob" class="knob-group" data-param="pitch" style="cursor: pointer;">
-          <circle cx="40" cy="100" r="15" fill="url(#chromeKnob)" stroke="#999" stroke-width="1"/>
-          <circle cx="40" cy="100" r="12" fill="#ddd"/>
-          <line x1="40" y1="90" x2="40" y2="95" stroke="#333" stroke-width="2" stroke-linecap="round" class="knob-pointer"/>
-          <text x="40" y="122" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">PITCH</text>
-          <text x="40" y="132" text-anchor="middle" fill="#ccc" font-size="6">${this.getCurrentIntervalName()}</text>
+          <circle cx="75" cy="80" r="15" fill="url(#chromeKnob)" stroke="#999" stroke-width="1"/>
+          <circle cx="75" cy="80" r="12" fill="#ddd"/>
+          <line x1="75" y1="70" x2="75" y2="75" stroke="#333" stroke-width="2" stroke-linecap="round" class="knob-pointer"/>
+          <text x="75" y="102" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">PITCH</text>
+          <text x="75" y="112" text-anchor="middle" fill="#ccc" font-size="6">${this.getCurrentIntervalName()}</text>
         </g>
         
         <!-- Tempo knob -->
         <g id="speed-knob" class="knob-group" data-param="speed" style="cursor: pointer;">
-          <circle cx="80" cy="100" r="15" fill="url(#chromeKnob)" stroke="#999" stroke-width="1"/>
-          <circle cx="80" cy="100" r="12" fill="#ddd"/>
-          <line x1="80" y1="90" x2="80" y2="95" stroke="#333" stroke-width="2" stroke-linecap="round" class="knob-pointer"/>
-          <text x="80" y="122" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">TEMPO</text>
-          <text x="80" y="132" text-anchor="middle" fill="#ccc" font-size="6">${this.getCurrentPlaybackRate()}x</text>
+          <circle cx="110" cy="80" r="15" fill="url(#chromeKnob)" stroke="#999" stroke-width="1"/>
+          <circle cx="110" cy="80" r="12" fill="#ddd"/>
+          <line x1="110" y1="70" x2="110" y2="75" stroke="#333" stroke-width="2" stroke-linecap="round" class="knob-pointer"/>
+          <text x="110" y="102" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">TEMPO</text>
+          <text x="110" y="112" text-anchor="middle" fill="#ccc" font-size="6">${this.getCurrentPlaybackRate()}x</text>
+        </g>
+        
+        <!-- Reset button under pitch and tempo knobs -->
+        <g id="reset-button" style="cursor: pointer;" class="reset-button">
+          <rect x="77" y="120" width="26" height="14" rx="2" fill="#333" stroke="#666" stroke-width="1"/>
+          <text x="90" y="130" text-anchor="middle" fill="#ccc" font-size="7" font-weight="bold">RESET</text>
         </g>
 
-        <!-- A jog buttons - right of knobs -->
-        <text x="120" y="85" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold">A</text>
-        
-        <!-- A back button (left arrow) -->
-        <g id="point-a-back" class="jog-button" data-action="a-back" style="cursor: pointer;">
-          <rect x="110" y="90" width="15" height="10" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
-          <polygon points="115,95 118,92 118,98" fill="#ccc"/>
-          <text x="117" y="88" text-anchor="middle" fill="#aaa" font-size="8">&lt;</text>
+        <!-- Status LEDs with properly grouped jog buttons -->
+        <g id="led-and-jog-section">
+          <!-- Point A section - LED with grouped jog buttons -->
+          <circle cx="40" cy="155" r="6" fill="${this.state.pointA ? 'url(#greenLED)' : '#002200'}" class="led-a" stroke="#333" stroke-width="1"/>
+          <text x="40" y="146" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">A</text>
+          
+          <!-- A jog buttons grouped together -->
+          <g id="point-a-back" class="jog-button" data-action="a-back" style="cursor: pointer;">
+            <rect x="23" y="164" width="18" height="15" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
+            <polygon points="27,171.5 33,168 33,175" fill="#ccc"/>
+          </g>
+          
+          <g id="point-a-forward" class="jog-button" data-action="a-forward" style="cursor: pointer;">
+            <rect x="43" y="164" width="18" height="15" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
+            <polygon points="57,171.5 51,168 51,175" fill="#ccc"/>
+          </g>
+          
+          <!-- Point B section - LED with grouped jog buttons -->
+          <circle cx="110" cy="155" r="6" fill="${this.state.pointB ? 'url(#greenLED)' : '#002200'}" class="led-b" stroke="#333" stroke-width="1"/>
+          <text x="110" y="146" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">B</text>
+          
+          <!-- B jog buttons grouped together -->
+          <g id="point-b-back" class="jog-button" data-action="b-back" style="cursor: pointer;">
+            <rect x="93" y="164" width="18" height="15" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
+            <polygon points="97,171.5 103,168 103,175" fill="#ccc"/>
+          </g>
+          
+          <g id="point-b-forward" class="jog-button" data-action="b-forward" style="cursor: pointer;">
+            <rect x="113" y="164" width="18" height="15" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
+            <polygon points="127,171.5 121,168 121,175" fill="#ccc"/>
+          </g>
+          
+          <!-- Loop LED centered -->
+          <circle cx="75" cy="155" r="7" fill="${this.state.isLooping ? 'url(#redLED)' : '#220000'}" class="led-loop" stroke="#333" stroke-width="1"/>
+          <text x="75" y="146" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">LOOP</text>
         </g>
         
-        <!-- A forward button (right arrow) -->
-        <g id="point-a-forward" class="jog-button" data-action="a-forward" style="cursor: pointer;">
-          <rect x="128" y="90" width="15" height="10" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
-          <polygon points="138,95 135,92 135,98" fill="#ccc"/>
-          <text x="136" y="88" text-anchor="middle" fill="#aaa" font-size="8">&gt;</text>
-        </g>
-        
-        <!-- B jog buttons - right of knobs -->
-        <text x="120" y="115" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold">B</text>
-        
-        <!-- B back button (left arrow) -->
-        <g id="point-b-back" class="jog-button" data-action="b-back" style="cursor: pointer;">
-          <rect x="110" y="120" width="15" height="10" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
-          <polygon points="115,125 118,122 118,128" fill="#ccc"/>
-          <text x="117" y="118" text-anchor="middle" fill="#aaa" font-size="8">&lt;</text>
-        </g>
-        
-        <!-- B forward button (right arrow) -->
-        <g id="point-b-forward" class="jog-button" data-action="b-forward" style="cursor: pointer;">
-          <rect x="128" y="120" width="15" height="10" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
-          <polygon points="138,125 135,122 135,128" fill="#ccc"/>
-          <text x="136" y="118" text-anchor="middle" fill="#aaa" font-size="8">&gt;</text>
-        </g>
-        
-        <!-- Reset button (above and between knobs) -->
-        <g id="reset-button" style="cursor: pointer;" class="reset-button">
-          <circle cx="60" cy="85" r="6" fill="#333" stroke="#666" stroke-width="1"/>
-          <text x="60" y="89" text-anchor="middle" fill="#ccc" font-size="8" font-weight="bold">R</text>
-          <text x="60" y="97" text-anchor="middle" fill="#888" font-size="5">RST</text>
-        </g>
-        
-        <!-- Settings hamburger menu (aligned with LED lights) -->
-        <g id="settings-gear" style="cursor: pointer;" class="settings-gear">
-          <rect x="127" y="139" width="16" height="12" rx="2" fill="#555" stroke="#888" stroke-width="1"/>
-          <line x1="130" y1="142" x2="140" y2="142" stroke="#ccc" stroke-width="1"/>
-          <line x1="130" y1="145" x2="140" y2="145" stroke="#ccc" stroke-width="1"/>
-          <line x1="130" y1="148" x2="140" y2="148" stroke="#ccc" stroke-width="1"/>
-          <text x="135" y="157" text-anchor="middle" fill="#ccc" font-size="5">MENU</text>
-        </g>
-        
-        <!-- Current settings display (moved to center) -->
-        <text x="85" y="165" text-anchor="middle" fill="#ccc" font-size="8" font-weight="bold">${this.getCurrentPlaybackRate()}x</text>
-        <text x="85" y="175" text-anchor="middle" fill="#888" font-size="6">${this.getCurrentIntervalName()}</text>
+        <!-- Display current settings -->
+        <text x="75" y="185" text-anchor="middle" fill="#ccc" font-size="8">STOP</text>
         
         <!-- Large black full-width footswitch with REC/PLAY label -->
         <g id="footswitch" style="cursor: pointer;" class="footswitch">
-          <rect x="20" y="190" width="130" height="60" rx="4" ry="4" fill="#000" stroke="#333" stroke-width="2"/>
-          <rect x="25" y="195" width="120" height="50" rx="2" ry="2" fill="#111" stroke="#222" stroke-width="1"/>
+          <rect x="20" y="200" width="130" height="60" rx="4" ry="4" fill="#000" stroke="#333" stroke-width="2"/>
+          <rect x="25" y="205" width="120" height="50" rx="2" ry="2" fill="#111" stroke="#222" stroke-width="1"/>
           <!-- Subtle texture on footswitch -->
-          <rect x="30" y="200" width="110" height="40" rx="2" ry="2" fill="#222"/>
+          <rect x="30" y="210" width="110" height="40" rx="2" ry="2" fill="#222"/>
           <!-- REC/PLAY label on footswitch -->
-          <text x="85" y="218" text-anchor="middle" fill="#ccc" font-size="10" font-weight="bold">REC</text>
-          <text x="85" y="232" text-anchor="middle" fill="#ccc" font-size="10" font-weight="bold">PLAY</text>
+          <text x="75" y="235" text-anchor="middle" fill="#ccc" font-size="10" font-weight="bold">REC/PLAY</text>
         </g>
         
         <!-- Bottom label -->
-        <text x="85" y="275" text-anchor="middle" fill="#666" font-size="8" font-weight="bold">YTLOOPER</text>
+        <text x="75" y="275" text-anchor="middle" fill="#666" font-size="8" font-weight="bold">Musical Loop Station</text>
       </svg>
     `;
   }
 
   private setupGUIEventListeners(gui: HTMLElement): void {
+    // Close button
+    const closeButton = gui.querySelector('.close-button');
+    if (closeButton) {
+      closeButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.toggleGUI();
+      });
+    }
+
+    // Hamburger menu
+    const hamburger = gui.querySelector('.hamburger-menu');
+    if (hamburger) {
+      hamburger.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.showSettingsModal();
+      });
+    }
+
     // Footswitch for loop control
     const footswitch = gui.querySelector('#footswitch');
     if (footswitch) {
@@ -1338,27 +1391,6 @@ class PunchLooper {
     knobs.forEach(knob => {
       knob.addEventListener('mousedown', (e) => this.startKnobDrag(e as MouseEvent, knob as SVGElement));
     });
-
-    // Musical mode indicator (informational only)
-    const musicalLED = gui.querySelector('.led-musical');
-    if (musicalLED) {
-      musicalLED.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this.showHUD('Using musical intervals - each step is a perfect semitone', 2000);
-      });
-      (musicalLED as SVGElement).style.cursor = 'pointer';
-    }
-
-    // Settings gear
-    const settingsGear = gui.querySelector('#settings-gear');
-    if (settingsGear) {
-      settingsGear.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        this.showSettingsModal();
-      });
-    }
 
     // Reset button
     const resetButton = gui.querySelector('#reset-button');
@@ -1387,28 +1419,40 @@ class PunchLooper {
     document.addEventListener('mousemove', (e) => this.handleKnobDrag(e));
     document.addEventListener('mouseup', () => this.endKnobDrag());
 
-    // Make GUI draggable
+    // Make GUI draggable ONLY by the top bar
     let isDragging = false;
     let dragOffset = { x: 0, y: 0 };
 
-    gui.addEventListener('mousedown', (e) => {
-      if ((e.target as Element).closest('.knob-group, #footswitch, .led-engine')) return;
-      isDragging = true;
-      const rect = gui.getBoundingClientRect();
-      dragOffset.x = e.clientX - rect.left;
-      dragOffset.y = e.clientY - rect.top;
-      gui.style.cursor = 'grabbing';
-    });
+    const dragHandle = gui.querySelector('.drag-handle') as HTMLElement;
+    if (dragHandle) {
+      dragHandle.addEventListener('mousedown', (e) => {
+        // Don't start drag if clicking close button or hamburger
+        if ((e.target as Element).closest('.close-button, .hamburger-menu')) return;
+        
+        isDragging = true;
+        const rect = gui.getBoundingClientRect();
+        dragOffset.x = e.clientX - rect.left;
+        dragOffset.y = e.clientY - rect.top;
+        dragHandle.style.cursor = 'grabbing';
+      });
+    }
 
     document.addEventListener('mousemove', (e) => {
       if (!isDragging) return;
-      gui.style.right = `${window.innerWidth - e.clientX - dragOffset.x}px`;
-      gui.style.bottom = `${window.innerHeight - e.clientY - dragOffset.y}px`;
+      gui.style.right = 'auto';
+      gui.style.bottom = 'auto';
+      gui.style.left = `${e.clientX - dragOffset.x}px`;
+      gui.style.top = `${e.clientY - dragOffset.y}px`;
     });
 
     document.addEventListener('mouseup', () => {
-      isDragging = false;
-      gui.style.cursor = '';
+      if (isDragging) {
+        isDragging = false;
+        const handle = gui.querySelector('.drag-handle') as HTMLElement;
+        if (handle) {
+          handle.style.cursor = 'move';
+        }
+      }
     });
   }
 
@@ -1426,6 +1470,7 @@ class PunchLooper {
       // Initialize native audio controls when GUI is shown
       if (this.state.activeMedia) {
         this.initializeNativeAudioControls();
+        this.updateDisplayText();
       }
     } else {
       this.state.guiElement.style.opacity = '0';
@@ -1477,6 +1522,48 @@ class PunchLooper {
     if (ledA) ledA.setAttribute('fill', this.state.pointA ? 'url(#greenLED)' : '#002200');
     if (ledB) ledB.setAttribute('fill', this.state.pointB ? 'url(#greenLED)' : '#002200');
     if (ledLoop) ledLoop.setAttribute('fill', this.state.isLooping ? 'url(#redLED)' : '#220000');
+    
+    // Update display text
+    this.updateDisplayText();
+  }
+  
+  private updateDisplayText(): void {
+    if (!this.state.guiElement || !this.state.activeMedia) return;
+    
+    // Update time display
+    const timeDisplay = this.state.guiElement.querySelector('#time-display');
+    if (timeDisplay) {
+      const currentTime = this.state.activeMedia.currentTime;
+      timeDisplay.textContent = this.formatTime(currentTime);
+    }
+    
+    // Update A/B points display
+    const pointsDisplay = this.state.guiElement.querySelector('#points-display');
+    if (pointsDisplay) {
+      const aPoint = this.state.pointA ? this.formatTimeShort(this.state.pointA) : '--';
+      const bPoint = this.state.pointB ? this.formatTimeShort(this.state.pointB) : '--';
+      pointsDisplay.textContent = `A:${aPoint} B:${bPoint}`;
+    }
+    
+    // Update status display
+    const statusDisplay = this.state.guiElement.querySelector('#status-display');
+    if (statusDisplay) {
+      if (this.state.isLooping) {
+        statusDisplay.textContent = 'LOOPING';
+      } else if (this.state.pointB) {
+        statusDisplay.textContent = 'A→B SET';
+      } else if (this.state.pointA) {
+        statusDisplay.textContent = 'A SET';
+      } else {
+        statusDisplay.textContent = 'READY';
+      }
+    }
+  }
+  
+  private formatTimeShort(seconds: number): string {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   }
 
   private startKnobDrag(e: MouseEvent, knob: SVGElement): void {
@@ -1496,22 +1583,31 @@ class PunchLooper {
     const deltaY = e.movementY;
     
     switch (this.state.isDraggingKnob) {
+      case 'volume':
+        // YouTube volume control - slower like tempo
+        this.adjustYouTubeVolume(-deltaY * 0.002);
+        break;
       case 'pitch':
-        // Direct chromatic stepping - more responsive
-        const pitchSensitivity = 0.1; // Higher sensitivity
-        const pitchDelta = -deltaY * pitchSensitivity;
-        if (Math.abs(pitchDelta) >= 0.2) { // Lower threshold for easier stepping
-          const step = pitchDelta > 0 ? 1 : -1;
-          this.adjustPitch(step);
+        // Smooth pitch control like other knobs, but snap to half-steps
+        const pitchSensitivity = 0.002; // Same sensitivity as other knobs
+        const currentPitch = this.state.currentPitchShift;
+        const newPitch = currentPitch + (-deltaY * pitchSensitivity * 24); // Scale to semitone range
+        
+        // Snap to nearest half-step
+        const snappedPitch = Math.round(newPitch * 2) / 2; // Round to nearest 0.5
+        const clampedPitch = Math.max(-12, Math.min(12, snappedPitch)); // Clamp to ±12 semitones
+        
+        // Use step-based adjustment if pitch changed
+        const stepChange = clampedPitch - currentPitch;
+        if (Math.abs(stepChange) >= 0.5) {
+          const steps = Math.round(stepChange / 0.5); // Convert to half-step increments
+          this.adjustPitch(steps * 0.5);
         }
         break;
       case 'speed':
         // Smooth speed control: 0.5x to 1.5x with noon = 1.0x
         const speedSensitivity = 0.002; // Keep same sensitivity
         this.adjustPlaybackRate(-deltaY * speedSensitivity);
-        break;
-      case 'volume':
-        this.adjustVolume(-deltaY * 0.005);
         break;
     }
     
@@ -1530,33 +1626,93 @@ class PunchLooper {
     if (!knob) return;
     
     let angle = 0;
-    const centerX = param === 'pitch' ? 40 : param === 'speed' ? 80 : 60; // Updated for side-by-side layout
-    const centerY = 100;
+    let centerX = 85;
+    const centerY = 80;
     
     switch (param) {
+      case 'volume':
+        centerX = 40;
+        // Volume range 0 to 1 mapped to -150° to +150°
+        if (this.state.activeMedia) {
+          angle = (this.state.activeMedia.volume - 0.5) * 300;
+          // Show in LCD display
+          const percentage = Math.round(this.state.activeMedia.volume * 100);
+          this.showParameterInDisplay(`VOL: ${percentage}%`);
+        }
+        break;
       case 'pitch':
+        centerX = 75;
         // 13 discrete positions: -6 to +6 semitones = -150° to +150°
         angle = (this.state.currentPitchShift / 6) * 150;
+        // Show in LCD display
+        this.showParameterInDisplay(`PITCH: ${this.getCurrentIntervalName()}`);
         break;
       case 'speed':
+        centerX = 110;
         // Speed range 0.5x to 1.5x with noon (0°) = 1.0x
-        // Map: 0.5x to -150°, 1.0x to 0°, 1.5x to +150°
-        const normalizedSpeed = (this.state.currentSpeedMultiplier - 1.0) / 0.5; // -1 to +1 range
-        angle = normalizedSpeed * 150; // Map to -150° to +150°
-        break;
-      case 'volume':
-        // Volume not implemented yet, keep at 0
-        angle = 0;
+        const normalizedSpeed = (this.state.currentSpeedMultiplier - 1.0) / 0.5;
+        angle = normalizedSpeed * 150;
+        // Show in LCD display
+        const speedPercentage = Math.round(this.state.currentSpeedMultiplier * 100);
+        this.showParameterInDisplay(`TEMPO: ${speedPercentage}%`);
         break;
     }
     
     knob.setAttribute('transform', `rotate(${angle} ${centerX} ${centerY})`);
+    
+    // Update volume display
+    if (param === 'volume' && this.state.activeMedia) {
+      const volText = this.state.guiElement.querySelector('#volume-knob text:last-child');
+      if (volText) {
+        volText.textContent = `${Math.round(this.state.activeMedia.volume * 100)}%`;
+      }
+    }
   }
 
-  private adjustVolume(delta: number): void {
-    // Volume control removed in favor of loop edge adjustment
-    this.showHUD('Use jog buttons around LED display to adjust loop edges', 1500);
+  private showParameterInDisplay(message: string): void {
+    if (!this.state.guiElement || !this.state.isGuiVisible) return;
+    
+    const statusDisplay = this.state.guiElement.querySelector('#status-display');
+    if (statusDisplay) {
+      statusDisplay.textContent = message;
+      
+      // Clear the parameter display after 2 seconds
+      setTimeout(() => {
+        if (this.state.guiElement && this.state.isGuiVisible) {
+          const currentStatusDisplay = this.state.guiElement.querySelector('#status-display');
+          if (currentStatusDisplay) {
+            if (this.state.isLooping) {
+              currentStatusDisplay.textContent = 'LOOPING';
+            } else if (this.state.pointB) {
+              currentStatusDisplay.textContent = 'A→B SET';
+            } else if (this.state.pointA) {
+              currentStatusDisplay.textContent = 'A SET';
+            } else {
+              currentStatusDisplay.textContent = 'READY';
+            }
+          }
+        }
+      }, 2000);
+    }
   }
+
+  private adjustYouTubeVolume(delta: number): void {
+    if (!this.state.activeMedia) {
+      this.showHUD('No media found', 1000);
+      return;
+    }
+
+    // Adjust volume (0 to 1 range)
+    const newVolume = Math.max(0, Math.min(1, this.state.activeMedia.volume + delta));
+    this.state.activeMedia.volume = newVolume;
+    
+    const percentage = Math.round(newVolume * 100);
+    this.showHUD(`Volume: ${percentage}%`, 500);
+    
+    // Update display immediately
+    this.updateDisplayText();
+  }
+
 
   private handleJogButton(action: string): void {
     if (!this.state.activeMedia) {
@@ -1572,6 +1728,7 @@ class PunchLooper {
           this.state.pointA = Math.max(0, this.state.pointA - adjustment);
           this.showHUD(`Point A: ${this.formatTime(this.state.pointA)}`, 800);
           this.updateGUILEDs();
+          this.updateDisplayText();
         } else {
           this.showHUD('Set point A first with footswitch', 1000);
         }
@@ -1585,6 +1742,7 @@ class PunchLooper {
             this.state.pointA = Math.min(maxTime, newA);
             this.showHUD(`Point A: ${this.formatTime(this.state.pointA)}`, 800);
             this.updateGUILEDs();
+            this.updateDisplayText();
           } else {
             this.showHUD('Point A cannot pass point B', 1000);
           }
@@ -1600,6 +1758,7 @@ class PunchLooper {
             this.state.pointB = Math.max(0, newB);
             this.showHUD(`Point B: ${this.formatTime(this.state.pointB)}`, 800);
             this.updateGUILEDs();
+            this.updateDisplayText();
           } else {
             this.showHUD('Point B cannot pass point A', 1000);
           }
@@ -1614,6 +1773,7 @@ class PunchLooper {
           this.state.pointB = Math.min(maxTime, this.state.pointB + adjustment);
           this.showHUD(`Point B: ${this.formatTime(this.state.pointB)}`, 800);
           this.updateGUILEDs();
+          this.updateDisplayText();
         } else {
           this.showHUD('Set point B first with footswitch', 1000);
         }
