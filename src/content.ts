@@ -12,6 +12,7 @@ interface LooperSettings {
   pointBPostTrim: number;
   jogAdjustmentMs: number;
   guiScale: number;
+  experimentalPitch: boolean;
   keyBindings: {
     setPointA: string;
     setPointB: string;
@@ -69,6 +70,7 @@ class PunchLooper {
     pointBPostTrim: 100,
     jogAdjustmentMs: 50,
     guiScale: 1.0,
+    experimentalPitch: false,
     keyBindings: {
       setPointA: 'BracketLeft',
       setPointB: 'BracketRight', 
@@ -531,23 +533,17 @@ class PunchLooper {
         this.handleMetronomeClick(currentTime, loopLength);
       }
       
-      // Handle both normal and overlapped loops
-      let effectivePointB: number;
-      let effectivePointA: number;
+      // Apply edge bleed to create overlap and eliminate gaps
+      // Edge bleed shortens the loop by moving B earlier and A later
+      const bleedSeconds = this.settings.edgeBleed / 1000;
       
-      if (this.state.pointB > this.state.pointA) {
-        // Normal loop: A -> B
-        const bleedCompensation = (this.settings.edgeBleed / 1000) * 0.5;
-        effectivePointB = this.state.pointB - bleedCompensation;
-        effectivePointA = Math.max(0, this.state.pointA - (this.settings.edgeBleed / 1000));
-      } else {
-        // Overlapped loop: A -> end, start -> B (creates tighter loop)
-        effectivePointB = this.state.pointB + (this.settings.edgeBleed / 1000);
-        effectivePointA = Math.max(0, this.state.pointA - (this.settings.edgeBleed / 1000));
-      }
+      // Move point B earlier (shortens the loop)
+      const effectivePointB = this.state.pointB - bleedSeconds;
+      // Keep point A at original position (or slightly later for overlap)
+      const effectivePointA = this.state.pointA;
       
-      const shouldLoop = (this.state.pointB > this.state.pointA && currentTime >= effectivePointB) ||
-                        (this.state.pointB <= this.state.pointA && (currentTime >= effectivePointA || currentTime <= effectivePointB));
+      // Check if we've reached the effective loop end point
+      const shouldLoop = currentTime >= effectivePointB;
       
       if (shouldLoop) {
         console.log(`Loop boundary hit: ${currentTime.toFixed(3)} -> A (${effectivePointA.toFixed(3)})`);
@@ -1037,33 +1033,60 @@ class PunchLooper {
       background: #2a2a2a !important;
       border-radius: 12px !important;
       padding: 24px !important;
-      width: 400px !important;
+      width: 500px !important;
       max-width: 90vw !important;
+      max-height: 80vh !important;
+      overflow-y: auto !important;
       box-shadow: 0 20px 40px rgba(0,0,0,0.5) !important;
       color: white !important;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
     `;
 
     modal.innerHTML = `
-      <div style="display: flex; align-items: center; margin-bottom: 20px;">
-        <h2 style="color: #ff3333; margin: 0; flex: 1; font-size: 20px;">YT Looper Settings</h2>
-        <button id="close-settings" style="background: none; border: none; color: #ccc; font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px;">&times;</button>
+      <div id="modal-header" style="
+        display: flex; 
+        align-items: center; 
+        justify-content: space-between;
+        margin-bottom: 20px; 
+        padding: 8px 12px;
+        background: #1a1a1a;
+        border-radius: 8px 8px 0 0;
+        margin: -24px -24px 20px -24px;
+        cursor: move;
+        user-select: none;
+      ">
+        <h2 style="color: #ff3333; margin: 0; font-size: 20px;">YT Looper Settings</h2>
+        <button id="close-settings" style="
+          background: none; 
+          border: none; 
+          color: #ccc; 
+          font-size: 20px; 
+          cursor: pointer; 
+          padding: 4px 8px;
+          border-radius: 4px;
+          transition: background-color 0.2s, color 0.2s;
+        " onmouseover="this.style.backgroundColor='#ff3333'; this.style.color='white';" 
+           onmouseout="this.style.backgroundColor='transparent'; this.style.color='#ccc';">&times;</button>
       </div>
       
       <div style="margin-bottom: 16px;">
-        <label style="display: block; margin-bottom: 8px; color: #ccc; font-size: 14px;">Latency Compensation (ms)</label>
-        <input type="range" id="latency-slider" min="0" max="200" value="${this.settings.latencyCompensation}" 
+        <label style="display: block; margin-bottom: 8px; color: #ccc; font-size: 14px;">Loop Timing Compensation</label>
+        <input type="range" id="latency-slider" min="-100" max="100" value="${this.settings.latencyCompensation}" 
                style="width: 100%; margin-bottom: 8px;">
         <div style="display: flex; justify-content: space-between; color: #888; font-size: 12px;">
-          <span>0ms</span>
-          <span id="latency-value">${this.settings.latencyCompensation}ms</span>
-          <span>200ms</span>
+          <span style="flex: 1; text-align: left;">Pre-loop<br>-100ms</span>
+          <span id="latency-value" style="flex: 1; text-align: center; font-weight: bold; color: #fff;">${this.settings.latencyCompensation > 0 ? '+' : ''}${this.settings.latencyCompensation}ms</span>
+          <span style="flex: 1; text-align: right;">Post-loop<br>+100ms</span>
         </div>
-        <p style="color: #999; font-size: 12px; margin: 8px 0 0 0;">Compensates for audio delay. Increase if loops feel late.</p>
+        <p style="color: #999; font-size: 12px; margin: 8px 0 0 0;">
+          <strong>0</strong> = keypress at exact loop point<br>
+          <strong>Negative</strong> = compensate for early keypresses<br>  
+          <strong>Positive</strong> = compensate for late keypresses
+        </p>
       </div>
 
       <div style="margin-bottom: 16px;">
-        <label style="display: block; margin-bottom: 8px; color: #ccc; font-size: 14px;">Loop Edge Bleed (ms)</label>
+        <label style="display: block; margin-bottom: 8px; color: #ccc; font-size: 14px;">Loop Overlap (ms)</label>
         <input type="range" id="bleed-slider" min="0" max="300" value="${this.settings.edgeBleed}" 
                style="width: 100%; margin-bottom: 8px;">
         <div style="display: flex; justify-content: space-between; color: #888; font-size: 12px;">
@@ -1071,9 +1094,108 @@ class PunchLooper {
           <span id="bleed-value">${this.settings.edgeBleed}ms</span>
           <span>300ms</span>
         </div>
-        <p style="color: #999; font-size: 12px; margin: 8px 0 0 0;">Overlap before A and after B for smoother loops.</p>
+        <p id="bleed-description" style="color: #999; font-size: 12px; margin: 8px 0 0 0;">
+          Loops back <strong>${this.settings.edgeBleed}ms early</strong> to eliminate gaps.<br>
+          Higher values = tighter loops with more overlap.
+        </p>
       </div>
 
+      <div style="margin-bottom: 16px;">
+        <label style="display: flex; align-items: center; gap: 8px; color: #ccc; font-size: 14px; cursor: pointer;">
+          <input type="checkbox" id="experimental-pitch" ${this.settings.experimentalPitch ? 'checked' : ''} 
+                 style="transform: scale(1.2);">
+          <span>Experimental Pitch Controls</span>
+        </label>
+        <p style="color: #999; font-size: 12px; margin: 8px 0 0 24px;">
+          Shows pitch adjustment controls in the GUI.<br>
+          <strong>Warning:</strong> May cause audio glitches on some videos.
+        </p>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <h3 style="color: #ff3333; margin: 0 0 12px 0; font-size: 16px;">Metronome</h3>
+        <label style="display: flex; align-items: center; gap: 8px; color: #ccc; font-size: 14px; cursor: pointer; margin-bottom: 12px;">
+          <input type="checkbox" id="metronome-enabled" ${this.settings.metronomeEnabled ? 'checked' : ''} 
+                 style="transform: scale(1.2);">
+          <span>Enable Metronome</span>
+        </label>
+        
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 8px; color: #ccc; font-size: 14px;">Clicks Per Loop</label>
+          <input type="range" id="clicks-slider" min="1" max="16" value="${this.settings.clicksPerLoop}" 
+                 style="width: 100%; margin-bottom: 8px;">
+          <div style="display: flex; justify-content: space-between; color: #888; font-size: 12px;">
+            <span>1</span>
+            <span id="clicks-value">${this.settings.clicksPerLoop}</span>
+            <span>16</span>
+          </div>
+          <p style="color: #999; font-size: 12px; margin: 8px 0 0 0;">Number of metronome clicks per loop cycle.</p>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <h3 style="color: #ff3333; margin: 0 0 12px 0; font-size: 16px;">Keyboard Shortcuts</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
+          <div style="display: flex; justify-content: space-between; color: #ccc;">
+            <span>Set Point A:</span>
+            <kbd style="background: #444; padding: 2px 6px; border-radius: 3px; font-family: monospace;">${this.getReadableKeyName(this.settings.keyBindings.setPointA)}</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; color: #ccc;">
+            <span>Set Point B:</span>
+            <kbd style="background: #444; padding: 2px 6px; border-radius: 3px; font-family: monospace;">${this.getReadableKeyName(this.settings.keyBindings.setPointB)}</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; color: #ccc;">
+            <span>Stop Loop:</span>
+            <kbd style="background: #444; padding: 2px 6px; border-radius: 3px; font-family: monospace;">${this.getReadableKeyName(this.settings.keyBindings.stopLoop)}</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; color: #ccc;">
+            <span>Toggle GUI:</span>
+            <kbd style="background: #444; padding: 2px 6px; border-radius: 3px; font-family: monospace;">Shift+G</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; color: #ccc;">
+            <span>Speed Up:</span>
+            <kbd style="background: #444; padding: 2px 6px; border-radius: 3px; font-family: monospace;">${this.getReadableKeyName(this.settings.keyBindings.speedUp)}</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; color: #ccc;">
+            <span>Speed Down:</span>
+            <kbd style="background: #444; padding: 2px 6px; border-radius: 3px; font-family: monospace;">${this.getReadableKeyName(this.settings.keyBindings.speedDown)}</kbd>
+          </div>
+          ${this.settings.experimentalPitch ? `
+          <div style="display: flex; justify-content: space-between; color: #ccc;">
+            <span>Pitch Up:</span>
+            <kbd style="background: #444; padding: 2px 6px; border-radius: 3px; font-family: monospace;">Shift+${this.getReadableKeyName(this.settings.keyBindings.pitchUp)}</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; color: #ccc;">
+            <span>Pitch Down:</span>
+            <kbd style="background: #444; padding: 2px 6px; border-radius: 3px; font-family: monospace;">Shift+${this.getReadableKeyName(this.settings.keyBindings.pitchDown)}</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; color: #ccc;">
+            <span>Reset Pitch:</span>
+            <kbd style="background: #444; padding: 2px 6px; border-radius: 3px; font-family: monospace;">Shift+${this.getReadableKeyName(this.settings.keyBindings.resetPitch)}</kbd>
+          </div>
+          ` : ''}
+          <div style="display: flex; justify-content: space-between; color: #ccc;">
+            <span>A Jog Back:</span>
+            <kbd style="background: #444; padding: 2px 6px; border-radius: 3px; font-family: monospace;">${this.getReadableKeyName(this.settings.keyBindings.jogABack)}</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; color: #ccc;">
+            <span>A Jog Forward:</span>
+            <kbd style="background: #444; padding: 2px 6px; border-radius: 3px; font-family: monospace;">${this.getReadableKeyName(this.settings.keyBindings.jogAForward)}</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; color: #ccc;">
+            <span>B Jog Back:</span>
+            <kbd style="background: #444; padding: 2px 6px; border-radius: 3px; font-family: monospace;">${this.getReadableKeyName(this.settings.keyBindings.jogBBack)}</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; color: #ccc;">
+            <span>B Jog Forward:</span>
+            <kbd style="background: #444; padding: 2px 6px; border-radius: 3px; font-family: monospace;">${this.getReadableKeyName(this.settings.keyBindings.jogBForward)}</kbd>
+          </div>
+          <div style="display: flex; justify-content: space-between; color: #ccc;">
+            <span>Toggle Metronome:</span>
+            <kbd style="background: #444; padding: 2px 6px; border-radius: 3px; font-family: monospace;">${this.getReadableKeyName(this.settings.keyBindings.toggleMetronome)}</kbd>
+          </div>
+        </div>
+      </div>
 
       <div style="display: flex; gap: 12px; margin-top: 24px;">
         <button id="reset-settings" style="flex: 1; padding: 10px; background: #444; color: white; border: none; border-radius: 6px; cursor: pointer;">Reset Defaults</button>
@@ -1091,17 +1213,44 @@ class PunchLooper {
     const bleedValue = modal.querySelector('#bleed-value') as HTMLElement;
     const jogSlider = modal.querySelector('#jog-slider') as HTMLInputElement;
     const jogValue = modal.querySelector('#jog-value') as HTMLElement;
+    const experimentalPitchCheckbox = modal.querySelector('#experimental-pitch') as HTMLInputElement;
+    const metronomeCheckbox = modal.querySelector('#metronome-enabled') as HTMLInputElement;
+    const clicksSlider = modal.querySelector('#clicks-slider') as HTMLInputElement;
+    const clicksValue = modal.querySelector('#clicks-value') as HTMLElement;
 
     latencySlider.addEventListener('input', () => {
-      latencyValue.textContent = `${latencySlider.value}ms`;
+      const value = parseInt(latencySlider.value);
+      const prefix = value > 0 ? '+' : '';
+      latencyValue.innerHTML = `${prefix}${value}ms`;
+      
+      // Update color based on value
+      if (value === 0) {
+        latencyValue.style.color = '#fff';
+      } else if (value < 0) {
+        latencyValue.style.color = '#66ccff'; // Blue for pre-loop
+      } else {
+        latencyValue.style.color = '#ffcc66'; // Orange for post-loop
+      }
     });
 
     bleedSlider.addEventListener('input', () => {
-      bleedValue.textContent = `${bleedSlider.value}ms`;
+      const value = bleedSlider.value;
+      bleedValue.textContent = `${value}ms`;
+      
+      // Update the description dynamically
+      const bleedDescription = modal.querySelector('#bleed-description');
+      if (bleedDescription) {
+        bleedDescription.innerHTML = `Loops back <strong>${value}ms early</strong> to eliminate gaps.<br>
+          Higher values = tighter loops with more overlap.`;
+      }
     });
 
     jogSlider?.addEventListener('input', () => {
       jogValue.textContent = `${jogSlider.value}ms`;
+    });
+
+    clicksSlider?.addEventListener('input', () => {
+      clicksValue.textContent = `${clicksSlider.value}`;
     });
 
     // Close modal
@@ -1114,12 +1263,61 @@ class PunchLooper {
       if (e.target === backdrop) closeModal();
     });
 
+    // Add drag functionality to modal header only
+    const modalHeader = modal.querySelector('#modal-header');
+    let isDragging = false;
+    let dragOffset = { x: 0, y: 0 };
+
+    modalHeader?.addEventListener('mousedown', (e) => {
+      // Don't start drag if clicking on close button
+      if ((e.target as Element).closest('#close-settings')) return;
+      
+      isDragging = true;
+      const modalRect = modal.getBoundingClientRect();
+      dragOffset.x = e.clientX - modalRect.left;
+      dragOffset.y = e.clientY - modalRect.top;
+      
+      modal.style.position = 'fixed';
+      modal.style.top = modalRect.top + 'px';
+      modal.style.left = modalRect.left + 'px';
+      modal.style.transform = 'none';
+      
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      
+      const newLeft = e.clientX - dragOffset.x;
+      const newTop = e.clientY - dragOffset.y;
+      
+      // Keep modal within viewport bounds
+      const maxLeft = window.innerWidth - modal.offsetWidth;
+      const maxTop = window.innerHeight - modal.offsetHeight;
+      
+      modal.style.left = Math.max(0, Math.min(maxLeft, newLeft)) + 'px';
+      modal.style.top = Math.max(0, Math.min(maxTop, newTop)) + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+      }
+    });
+
     // Reset defaults
     modal.querySelector('#reset-settings')?.addEventListener('click', () => {
-      latencySlider.value = '50';
+      latencySlider.value = '0';
       bleedSlider.value = '100';
-      latencyValue.textContent = '50ms';
+      jogSlider.value = '10';
+      experimentalPitchCheckbox.checked = false;
+      metronomeCheckbox.checked = false;
+      clicksSlider.value = '4';
+      latencyValue.innerHTML = '0ms';
+      latencyValue.style.color = '#fff';
       bleedValue.textContent = '100ms';
+      jogValue.textContent = '10ms';
+      clicksValue.textContent = '4';
     });
 
     // Save settings
@@ -1127,20 +1325,62 @@ class PunchLooper {
       this.settings.latencyCompensation = parseInt(latencySlider.value);
       this.settings.edgeBleed = parseInt(bleedSlider.value);
       this.settings.jogAdjustmentMs = parseInt(jogSlider.value);
+      this.settings.experimentalPitch = experimentalPitchCheckbox.checked;
+      this.settings.metronomeEnabled = metronomeCheckbox.checked;
+      this.settings.clicksPerLoop = parseInt(clicksSlider.value);
 
       try {
         await chrome.storage.sync.set({
           latencyCompensation: this.settings.latencyCompensation,
           edgeBleed: this.settings.edgeBleed,
-          jogAdjustmentMs: this.settings.jogAdjustmentMs
+          jogAdjustmentMs: this.settings.jogAdjustmentMs,
+          experimentalPitch: this.settings.experimentalPitch,
+          metronomeEnabled: this.settings.metronomeEnabled,
+          clicksPerLoop: this.settings.clicksPerLoop
         });
-        this.showHUD('Settings saved!', 1000);
+        this.showHUD('Settings saved! Refresh page to see changes.', 2000);
+        
+        // Update pitch controls visibility immediately
+        this.updatePitchControlsVisibility();
+        
         closeModal();
       } catch (error) {
         console.error('Failed to save settings:', error);
         this.showHUD('Failed to save settings', 2000);
       }
     });
+  }
+
+  private getReadableKeyName(keyCode: string): string {
+    const keyMap: { [key: string]: string } = {
+      'BracketLeft': '[',
+      'BracketRight': ']',
+      'Backslash': '\\',
+      'Equal': '=',
+      'Minus': '-',
+      'ArrowUp': '↑',
+      'ArrowDown': '↓',
+      'ArrowLeft': '←',
+      'ArrowRight': '→',
+      'KeyR': 'R',
+      'KeyM': 'M',
+      'KeyG': 'G',
+      'Comma': ',',
+      'Period': '.',
+      'Semicolon': ';',
+      'Quote': "'",
+      'Space': 'Space'
+    };
+    return keyMap[keyCode] || keyCode.replace('Key', '');
+  }
+
+  private updatePitchControlsVisibility(): void {
+    if (!this.state.guiElement) return;
+    
+    const pitchControls = this.state.guiElement.querySelector('#pitch-controls');
+    if (pitchControls) {
+      (pitchControls as SVGElement).style.display = this.settings.experimentalPitch ? 'block' : 'none';
+    }
   }
 
   private hideHUD(): void {
@@ -1181,6 +1421,9 @@ class PunchLooper {
     
     document.body.appendChild(gui);
     this.state.guiElement = gui;
+    
+    // Update pitch controls visibility based on settings
+    this.updatePitchControlsVisibility();
   }
 
   private createPedalSVG(): string {
@@ -1223,6 +1466,11 @@ class PunchLooper {
             <stop offset="0%" style="stop-color:#ffaa44"/>
             <stop offset="100%" style="stop-color:#cc6600"/>
           </radialGradient>
+          <!-- Amber LED -->
+          <radialGradient id="amberLED" cx="50%" cy="30%" r="60%">
+            <stop offset="0%" style="stop-color:#ffcc00"/>
+            <stop offset="100%" style="stop-color:#cc9900"/>
+          </radialGradient>
         </defs>
         
         <!-- Main pedal body - Red with round corners -->
@@ -1254,10 +1502,15 @@ class PunchLooper {
               fill="#111" 
               stroke="#333" stroke-width="1"/>
         
-        <!-- Digital display inside black box - 2x taller -->
+        <!-- Digital display inside black box - reorganized layout -->
         <rect x="25" y="40" width="120" height="30" rx="2" ry="2" fill="#000" stroke="#00ff00" stroke-width="1"/>
-        <text id="main-display" x="85" y="52" text-anchor="middle" fill="#00ff00" font-size="10" font-family="Courier New, monospace" font-weight="bold">A:--:-- B:--:--</text>
-        <text id="info-display" x="85" y="63" text-anchor="middle" fill="#00aa00" font-size="8" font-family="Courier New, monospace">READY</text>
+        
+        <!-- A/B times stacked on left side -->
+        <text id="a-time-display" x="35" y="50" text-anchor="start" fill="#00ff00" font-size="9" font-family="Courier New, monospace" font-weight="bold">A:--:--</text>
+        <text id="b-time-display" x="35" y="62" text-anchor="start" fill="#00ff00" font-size="9" font-family="Courier New, monospace" font-weight="bold">B:--:--</text>
+        
+        <!-- Parameter info on far right -->
+        <text id="param-display" x="135" y="56" text-anchor="end" fill="#00aa00" font-size="8" font-family="Courier New, monospace">READY</text>
         
         <!-- Input jacks -->
         <circle cx="30" cy="45" r="4" fill="#333" stroke="#666" stroke-width="1"/>
@@ -1275,7 +1528,7 @@ class PunchLooper {
         <circle cx="60" cy="145" r="4" fill="${this.state.pointB ? 'url(#greenLED)' : '#002200'}" class="led-b" stroke="#333" stroke-width="1"/>
         <text x="60" y="158" text-anchor="middle" fill="#fff" font-size="7" font-weight="bold">B</text>
         
-        <circle cx="90" cy="145" r="5" fill="${this.state.isLooping ? 'url(#redLED)' : '#220000'}" class="led-loop" stroke="#333" stroke-width="1"/>
+        <circle cx="90" cy="145" r="5" fill="${this.state.isLooping ? 'url(#amberLED)' : '#331100'}" class="led-loop" stroke="#333" stroke-width="1"/>
         <text x="90" y="158" text-anchor="middle" fill="#fff" font-size="7" font-weight="bold">LOOP</text>
         
         <!-- Two control knobs side by side on left - VOLUME and TEMPO only -->
@@ -1294,12 +1547,11 @@ class PunchLooper {
           <circle cx="80" cy="100" r="12" fill="#ddd"/>
           <line x1="80" y1="90" x2="80" y2="95" stroke="#333" stroke-width="2" stroke-linecap="round" class="knob-pointer"/>
           <text x="80" y="122" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">TEMPO</text>
-          <text x="80" y="132" text-anchor="middle" fill="#ccc" font-size="6">${this.getCurrentPlaybackRate()}x</text>
         </g>
 
 
         <!-- A jog buttons - right of knobs -->
-        <text x="120" y="85" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold">A</text>
+        <text x="120" y="85" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">A POINT</text>
         
         <!-- A back button (left arrow) -->
         <g id="point-a-back" class="jog-button" data-action="a-back" style="cursor: pointer;">
@@ -1316,7 +1568,7 @@ class PunchLooper {
         </g>
         
         <!-- B jog buttons - right of knobs -->
-        <text x="120" y="115" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold">B</text>
+        <text x="120" y="115" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">B POINT</text>
         
         <!-- B back button (left arrow) -->
         <g id="point-b-back" class="jog-button" data-action="b-back" style="cursor: pointer;">
@@ -1339,26 +1591,43 @@ class PunchLooper {
           <text x="60" y="97" text-anchor="middle" fill="#888" font-size="5">RST</text>
         </g>
         
-        <!-- Pitch shift buttons - horizontal layout like A/B buttons -->
-        <text x="120" y="145" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold">PITCH</text>
-        
-        <!-- Pitch down button (left) -->
-        <g id="pitch-down" class="pitch-button" data-action="pitch-down" style="cursor: pointer;">
-          <rect x="108" y="149" width="20" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
-          <polygon points="118,158 115,153 121,153" fill="#ccc"/>
-          <text x="118" y="147" text-anchor="middle" fill="#aaa" font-size="8">↓</text>
+        <!-- Pitch controls - experimental feature, hidden by default -->
+        <g id="pitch-controls" style="display: ${this.settings.experimentalPitch ? 'block' : 'none'};">
+          <!-- Pitch down button -->
+          <g id="pitch-down" class="pitch-button" data-action="pitch-down" style="cursor: pointer;">
+            <rect x="20" y="165" width="18" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
+            <polygon points="29,174 26,169 32,169" fill="#ccc"/>
+          </g>
+          
+          <!-- Pitch up button -->
+          <g id="pitch-up" class="pitch-button" data-action="pitch-up" style="cursor: pointer;">
+            <rect x="40" y="165" width="18" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
+            <polygon points="49,168 46,173 52,173" fill="#ccc"/>
+          </g>
+          
+          <!-- Pitch label to the right - now white -->
+          <text x="62" y="172" text-anchor="start" fill="#fff" font-size="7">PITCH</text>
         </g>
         
-        <!-- Pitch up button (right) -->
-        <g id="pitch-up" class="pitch-button" data-action="pitch-up" style="cursor: pointer;">
+        <!-- Section shift buttons - keep on right side -->
+        <text x="120" y="145" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold">SECTION</text>
+        
+        <!-- Section back button (left) -->
+        <g id="section-back" class="section-button" data-action="section-back" style="cursor: pointer;">
+          <rect x="108" y="149" width="20" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
+          <polygon points="113,155 118,152 118,158" fill="#ccc"/>
+          <text x="118" y="156" text-anchor="middle" fill="#aaa" font-size="8">«</text>
+        </g>
+        
+        <!-- Section forward button (right) -->
+        <g id="section-forward" class="section-button" data-action="section-forward" style="cursor: pointer;">
           <rect x="130" y="149" width="20" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
-          <polygon points="140,152 137,157 143,157" fill="#ccc"/>
-          <text x="140" y="147" text-anchor="middle" fill="#aaa" font-size="8">↑</text>
+          <polygon points="145,155 140,152 140,158" fill="#ccc"/>
+          <text x="140" y="156" text-anchor="middle" fill="#aaa" font-size="8">»</text>
         </g>
         
         <!-- Current settings display (moved to center) -->
-        <text x="85" y="165" text-anchor="middle" fill="#ccc" font-size="8" font-weight="bold">${this.getCurrentPlaybackRate()}x</text>
-        <text x="85" y="175" text-anchor="middle" fill="#888" font-size="6">${this.getCurrentIntervalName()}</text>
+        <text x="85" y="170" text-anchor="middle" fill="#888" font-size="6">${this.getCurrentIntervalName()}</text>
         
         <!-- Large black full-width footswitch with REC/PLAY label -->
         <g id="footswitch" style="cursor: pointer;" class="footswitch">
@@ -1431,6 +1700,21 @@ class PunchLooper {
       });
     });
 
+    // Section buttons for shifting entire loop region
+    const sectionButtons = gui.querySelectorAll('.section-button');
+    sectionButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const action = (button as SVGElement).getAttribute('data-action');
+        if (action === 'section-forward') {
+          this.shiftLoopSection(1);
+        } else if (action === 'section-back') {
+          this.shiftLoopSection(-1);
+        }
+      });
+    });
+
     // Global mouse events for knob dragging
     document.addEventListener('mousemove', (e) => this.handleKnobDrag(e));
     document.addEventListener('mouseup', () => this.endKnobDrag());
@@ -1461,7 +1745,7 @@ class PunchLooper {
 
     gui.addEventListener('mousedown', (e) => {
       // Don't drag if clicking on interactive elements
-      if ((e.target as Element).closest('.knob-group, #footswitch, .pitch-button, .jog-button, #reset-button, #hamburger-menu, #close-button')) return;
+      if ((e.target as Element).closest('.knob-group, #footswitch, .pitch-button, .jog-button, .section-button, #reset-button, #hamburger-menu, #close-button')) return;
       
       e.preventDefault();
       e.stopPropagation();
@@ -1551,7 +1835,7 @@ class PunchLooper {
 
     if (ledA) ledA.setAttribute('fill', this.state.pointA ? 'url(#greenLED)' : '#002200');
     if (ledB) ledB.setAttribute('fill', this.state.pointB ? 'url(#greenLED)' : '#002200');
-    if (ledLoop) ledLoop.setAttribute('fill', this.state.isLooping ? 'url(#redLED)' : '#220000');
+    if (ledLoop) ledLoop.setAttribute('fill', this.state.isLooping ? 'url(#amberLED)' : '#331100');
     
     // Update display text
     this.updateDisplayText();
@@ -1565,33 +1849,30 @@ class PunchLooper {
     const pitchSign = this.state.currentPitchShift > 0 ? '+' : '';
     const pitchText = this.state.currentPitchShift !== 0 ? ` ${pitchSign}${this.state.currentPitchShift}ST` : '';
     const speedText = `${Math.round(this.state.currentSpeedMultiplier * 100)}%`;
-    const volumeText = `${Math.round(this.state.activeMedia.volume * 100)}%`;
+    // Remove volumeText - not needed in new layout
     
     
-    // Update main digital display in black box
-    const mainDisplay = this.state.guiElement.querySelector('#main-display');
-    if (mainDisplay) {
-      mainDisplay.textContent = `A:${aPoint} B:${bPoint}`;
+    // Update stacked A/B time displays
+    const aTimeDisplay = this.state.guiElement.querySelector('#a-time-display');
+    if (aTimeDisplay) {
+      aTimeDisplay.textContent = `A:${aPoint}`;
     }
     
-    // Update info display with pitch, speed, volume
-    const infoDisplay = this.state.guiElement.querySelector('#info-display');
-    if (infoDisplay) {
+    const bTimeDisplay = this.state.guiElement.querySelector('#b-time-display');
+    if (bTimeDisplay) {
+      bTimeDisplay.textContent = `B:${bPoint}`;
+    }
+    
+    // Update parameter display on far right (no volume unless needed)
+    const paramDisplay = this.state.guiElement.querySelector('#param-display');
+    if (paramDisplay) {
       if (this.state.isLooping) {
-        infoDisplay.textContent = `LOOP ${speedText} V:${volumeText}${pitchText}`;
+        paramDisplay.textContent = `LOOP ${speedText}${pitchText}`;
       } else if (this.state.currentPitchShift !== 0 || this.state.currentSpeedMultiplier !== 1.0) {
-        infoDisplay.textContent = `${speedText} V:${volumeText}${pitchText}`;
+        paramDisplay.textContent = `${speedText}${pitchText}`;
       } else {
-        infoDisplay.textContent = `READY V:${volumeText}`;
+        paramDisplay.textContent = 'READY';
       }
-    }
-    
-    // Update A/B points display  
-    const pointsDisplay = this.state.guiElement.querySelector('#points-display');
-    if (pointsDisplay) {
-      const aPoint = this.state.pointA ? this.formatTimeShort(this.state.pointA) : '--';
-      const bPoint = this.state.pointB ? this.formatTimeShort(this.state.pointB) : '--';
-      pointsDisplay.textContent = `A:${aPoint} B:${bPoint}`;
     }
     
     // Update status display
@@ -1750,7 +2031,7 @@ class PunchLooper {
       case 'a-back':
         if (this.state.pointA !== null) {
           this.state.pointA = Math.max(0, this.state.pointA - adjustment);
-          this.showHUD(`Point A: ${this.formatTime(this.state.pointA)}`, 800);
+          this.showHUD(`A: ${this.formatTimeWithMs(this.state.pointA)}`, 1200);
           this.updateGUILEDs();
           this.updateDisplayText();
         } else {
@@ -1764,7 +2045,7 @@ class PunchLooper {
           const newA = this.state.pointA + adjustment;
           if (!this.state.pointB || newA < this.state.pointB) {
             this.state.pointA = Math.min(maxTime, newA);
-            this.showHUD(`Point A: ${this.formatTime(this.state.pointA)}`, 800);
+            this.showHUD(`A: ${this.formatTimeWithMs(this.state.pointA)}`, 1200);
             this.updateGUILEDs();
             this.updateDisplayText();
           } else {
@@ -1780,7 +2061,7 @@ class PunchLooper {
           const newB = this.state.pointB - adjustment;
           if (!this.state.pointA || newB > this.state.pointA) {
             this.state.pointB = Math.max(0, newB);
-            this.showHUD(`Point B: ${this.formatTime(this.state.pointB)}`, 800);
+            this.showHUD(`B: ${this.formatTimeWithMs(this.state.pointB)}`, 1200);
             this.updateGUILEDs();
             this.updateDisplayText();
           } else {
@@ -1795,7 +2076,7 @@ class PunchLooper {
         if (this.state.pointB !== null) {
           const maxTime = this.state.activeMedia.duration || this.state.activeMedia.currentTime + 10;
           this.state.pointB = Math.min(maxTime, this.state.pointB + adjustment);
-          this.showHUD(`Point B: ${this.formatTime(this.state.pointB)}`, 800);
+          this.showHUD(`B: ${this.formatTimeWithMs(this.state.pointB)}`, 1200);
           this.updateGUILEDs();
           this.updateDisplayText();
         } else {
@@ -1805,10 +2086,60 @@ class PunchLooper {
     }
   }
 
+  private shiftLoopSection(direction: number): void {
+    if (!this.state.pointA || !this.state.pointB || !this.state.activeMedia) {
+      this.showHUD('Set loop points first', 1000);
+      return;
+    }
+
+    // Calculate the current loop duration
+    const loopDuration = this.state.pointB - this.state.pointA;
+    
+    // Shift the entire loop region by its duration
+    const shift = loopDuration * direction;
+    const newPointA = this.state.pointA + shift;
+    const newPointB = this.state.pointB + shift;
+
+    // Check boundaries
+    if (newPointA < 0 || newPointB > this.state.activeMedia.duration) {
+      this.showHUD('Cannot shift: reached media boundary', 1000);
+      return;
+    }
+
+    // Apply the shift
+    this.state.pointA = newPointA;
+    this.state.pointB = newPointB;
+    
+    // Update loop boundaries if we have an active loop
+    if (this.state.loopA !== null && this.state.loopB !== null) {
+      this.state.loopA = newPointA;
+      this.state.loopB = newPointB;
+    }
+
+    // If currently looping, jump to the new loop start
+    if (this.state.isLooping && this.state.activeMedia) {
+      this.state.activeMedia.currentTime = this.state.pointA;
+    }
+
+    // Update display
+    const directionText = direction > 0 ? 'forward' : 'backward';
+    this.showHUD(`Section shifted ${directionText}`, 1000);
+    this.updateGUILEDs();
+    this.updateDisplayText();
+  }
+
   private formatTime(seconds: number): string {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toFixed(3).padStart(6, '0')}`;
+  }
+
+  private formatTimeWithMs(seconds: number): string {
+    const mins = Math.floor(seconds / 60);
+    const remainingSecs = seconds % 60;
+    const wholeSecs = Math.floor(remainingSecs);
+    const ms = Math.round((remainingSecs - wholeSecs) * 1000);
+    return `${mins}:${wholeSecs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
   }
 
   private getCurrentInterval() {
