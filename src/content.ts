@@ -1360,7 +1360,7 @@ class PunchLooper {
           metronomeEnabled: this.settings.metronomeEnabled,
           clicksPerLoop: this.settings.clicksPerLoop
         });
-        this.showHUD('Settings saved! Refresh page to see changes.', 2000);
+        this.showHUD('Settings saved!', 2000);
         
         // Update pitch controls visibility immediately
         this.updatePitchControlsVisibility();
@@ -1510,13 +1510,13 @@ class PunchLooper {
           <rect x="25" y="13" width="12" height="2" fill="#ccc"/>
           <rect x="25" y="16" width="12" height="2" fill="#ccc"/>
           <rect x="25" y="19" width="12" height="2" fill="#ccc"/>
-          <text x="31" y="28" text-anchor="middle" fill="#888" font-size="5">MENU</text>
+          <text x="31" y="28" text-anchor="middle" fill="#888" font-size="6" font-family="Arial, sans-serif">MENU</text>
         </g>
         
         <!-- Close button (right) -->
         <g id="close-button" style="cursor: pointer;" class="close-button">
           <circle cx="145" cy="18" r="6" fill="#444" stroke="#666" stroke-width="1"/>
-          <text x="145" y="21" text-anchor="middle" fill="#ccc" font-size="10" font-weight="bold">×</text>
+          <text x="145" y="21" text-anchor="middle" fill="#ccc" font-size="12" font-weight="bold" font-family="Arial, sans-serif">×</text>
         </g>
               
         <!-- Main branding section -->
@@ -1537,21 +1537,21 @@ class PunchLooper {
         <!-- Input jacks -->
         <circle cx="30" cy="45" r="4" fill="#333" stroke="#666" stroke-width="1"/>
         <circle cx="30" cy="45" r="2" fill="#000"/>
-        <text x="30" y="60" text-anchor="middle" fill="#888" font-size="6">IN 1</text>
+        <text x="30" y="60" text-anchor="middle" fill="#888" font-size="7" font-family="Arial, sans-serif">IN 1</text>
         
         <circle cx="140" cy="45" r="4" fill="#333" stroke="#666" stroke-width="1"/>
         <circle cx="140" cy="45" r="2" fill="#000"/>
-        <text x="140" y="60" text-anchor="middle" fill="#888" font-size="6">IN 2</text>
+        <text x="140" y="60" text-anchor="middle" fill="#888" font-size="7" font-family="Arial, sans-serif">IN 2</text>
         
         <!-- Status LEDs horizontally below knobs -->
         <circle cx="30" cy="145" r="4" fill="${this.state.pointA ? 'url(#greenLED)' : '#002200'}" class="led-a" stroke="#333" stroke-width="1"/>
-        <text x="30" y="158" text-anchor="middle" fill="#fff" font-size="7" font-weight="bold">A</text>
+        <text x="30" y="158" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold" font-family="Arial, sans-serif">A</text>
         
         <circle cx="60" cy="145" r="4" fill="${this.state.pointB ? 'url(#greenLED)' : '#002200'}" class="led-b" stroke="#333" stroke-width="1"/>
-        <text x="60" y="158" text-anchor="middle" fill="#fff" font-size="7" font-weight="bold">B</text>
+        <text x="60" y="158" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold" font-family="Arial, sans-serif">B</text>
         
         <circle cx="90" cy="145" r="5" fill="${this.state.isLooping ? 'url(#amberLED)' : '#331100'}" class="led-loop" stroke="#333" stroke-width="1"/>
-        <text x="90" y="158" text-anchor="middle" fill="#fff" font-size="7" font-weight="bold">LOOP</text>
+        <text x="90" y="158" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold" font-family="Arial, sans-serif">LOOP</text>
         
         <!-- Two control knobs side by side on left - VOLUME and TEMPO only -->
         <!-- Volume knob -->
@@ -1559,8 +1559,8 @@ class PunchLooper {
           <circle cx="40" cy="100" r="15" fill="url(#chromeKnob)" stroke="#999" stroke-width="1"/>
           <circle cx="40" cy="100" r="12" fill="#ddd"/>
           <line x1="40" y1="90" x2="40" y2="95" stroke="#333" stroke-width="2" stroke-linecap="round" class="knob-pointer"/>
-          <text x="40" y="122" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">VOLUME</text>
-          <text x="40" y="132" text-anchor="middle" fill="#ccc" font-size="6">100%</text>
+          <text x="40" y="122" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold" font-family="Arial, sans-serif">VOLUME</text>
+          <text x="40" y="132" text-anchor="middle" fill="#ccc" font-size="7" font-family="Arial, sans-serif">100%</text>
         </g>
         
         <!-- Tempo knob -->
@@ -1568,49 +1568,49 @@ class PunchLooper {
           <circle cx="80" cy="100" r="15" fill="url(#chromeKnob)" stroke="#999" stroke-width="1"/>
           <circle cx="80" cy="100" r="12" fill="#ddd"/>
           <line x1="80" y1="90" x2="80" y2="95" stroke="#333" stroke-width="2" stroke-linecap="round" class="knob-pointer"/>
-          <text x="80" y="122" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">TEMPO</text>
+          <text x="80" y="122" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold" font-family="Arial, sans-serif">TEMPO</text>
         </g>
 
 
         <!-- A jog buttons - right of knobs -->
-        <text x="120" y="85" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">A POINT</text>
+        <text x="130" y="85" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold" font-family="Arial, sans-serif">A POINT</text>
         
         <!-- A back button (left arrow) -->
         <g id="point-a-back" class="jog-button" data-action="a-back" style="cursor: pointer;">
           <rect x="108" y="89" width="20" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
           <polygon points="113,95 118,92 118,98" fill="#ccc"/>
-          <text x="118" y="87" text-anchor="middle" fill="#aaa" font-size="8">&lt;</text>
+          <text x="118" y="87" text-anchor="middle" fill="#aaa" font-size="8" font-family="Arial, sans-serif">&lt;</text>
         </g>
         
         <!-- A forward button (right arrow) -->
         <g id="point-a-forward" class="jog-button" data-action="a-forward" style="cursor: pointer;">
           <rect x="130" y="89" width="20" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
           <polygon points="145,95 140,92 140,98" fill="#ccc"/>
-          <text x="140" y="87" text-anchor="middle" fill="#aaa" font-size="8">&gt;</text>
+          <text x="140" y="87" text-anchor="middle" fill="#aaa" font-size="8" font-family="Arial, sans-serif">&gt;</text>
         </g>
         
         <!-- B jog buttons - right of knobs -->
-        <text x="120" y="115" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">B POINT</text>
+        <text x="130" y="115" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold" font-family="Arial, sans-serif">B POINT</text>
         
         <!-- B back button (left arrow) -->
         <g id="point-b-back" class="jog-button" data-action="b-back" style="cursor: pointer;">
           <rect x="108" y="119" width="20" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
           <polygon points="113,125 118,122 118,128" fill="#ccc"/>
-          <text x="118" y="117" text-anchor="middle" fill="#aaa" font-size="8">&lt;</text>
+          <text x="118" y="117" text-anchor="middle" fill="#aaa" font-size="8" font-family="Arial, sans-serif">&lt;</text>
         </g>
         
         <!-- B forward button (right arrow) -->
         <g id="point-b-forward" class="jog-button" data-action="b-forward" style="cursor: pointer;">
           <rect x="130" y="119" width="20" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
           <polygon points="145,125 140,122 140,128" fill="#ccc"/>
-          <text x="140" y="117" text-anchor="middle" fill="#aaa" font-size="8">&gt;</text>
+          <text x="140" y="117" text-anchor="middle" fill="#aaa" font-size="8" font-family="Arial, sans-serif">&gt;</text>
         </g>
         
         <!-- Reset button (above and between knobs) -->
         <g id="reset-button" style="cursor: pointer;" class="reset-button">
           <circle cx="60" cy="85" r="6" fill="#333" stroke="#666" stroke-width="1"/>
-          <text x="60" y="89" text-anchor="middle" fill="#ccc" font-size="8" font-weight="bold">R</text>
-          <text x="60" y="97" text-anchor="middle" fill="#888" font-size="5">RST</text>
+          <text x="60" y="89" text-anchor="middle" fill="#ccc" font-size="8" font-weight="bold" font-family="Arial, sans-serif">R</text>
+          <text x="60" y="97" text-anchor="middle" fill="#888" font-size="6" font-family="Arial, sans-serif">RST</text>
         </g>
         
         <!-- Pitch controls - experimental feature, hidden by default -->
@@ -1628,28 +1628,28 @@ class PunchLooper {
           </g>
           
           <!-- Pitch label to the right - now white -->
-          <text x="62" y="172" text-anchor="start" fill="#fff" font-size="7">PITCH</text>
+          <text x="62" y="172" text-anchor="start" fill="#fff" font-size="8" font-family="Arial, sans-serif">PITCH</text>
         </g>
         
         <!-- Section shift buttons - keep on right side -->
-        <text x="120" y="145" text-anchor="middle" fill="#fff" font-size="9" font-weight="bold">SECTION</text>
+        <text x="130" y="145" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold" font-family="Arial, sans-serif">SECTION</text>
         
         <!-- Section back button (left) -->
         <g id="section-back" class="section-button" data-action="section-back" style="cursor: pointer;">
           <rect x="108" y="149" width="20" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
           <polygon points="113,155 118,152 118,158" fill="#ccc"/>
-          <text x="118" y="156" text-anchor="middle" fill="#aaa" font-size="8">«</text>
+          <text x="118" y="156" text-anchor="middle" fill="#aaa" font-size="8" font-family="Arial, sans-serif">«</text>
         </g>
         
         <!-- Section forward button (right) -->
         <g id="section-forward" class="section-button" data-action="section-forward" style="cursor: pointer;">
           <rect x="130" y="149" width="20" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
           <polygon points="145,155 140,152 140,158" fill="#ccc"/>
-          <text x="140" y="156" text-anchor="middle" fill="#aaa" font-size="8">»</text>
+          <text x="140" y="156" text-anchor="middle" fill="#aaa" font-size="8" font-family="Arial, sans-serif">»</text>
         </g>
         
         <!-- Current settings display (moved to center) -->
-        <text x="85" y="170" text-anchor="middle" fill="#888" font-size="6">${this.getCurrentIntervalName()}</text>
+        <text x="85" y="170" text-anchor="middle" fill="#888" font-size="7" font-family="Arial, sans-serif">${this.getCurrentIntervalName()}</text>
         
         <!-- Large black full-width footswitch with REC/PLAY label -->
         <g id="footswitch" style="cursor: pointer;" class="footswitch">
@@ -1658,8 +1658,8 @@ class PunchLooper {
           <!-- Subtle texture on footswitch -->
           <rect x="30" y="200" width="110" height="40" rx="2" ry="2" fill="#222"/>
           <!-- REC/PLAY label on footswitch -->
-          <text x="85" y="218" text-anchor="middle" fill="#ccc" font-size="10" font-weight="bold">REC</text>
-          <text x="85" y="232" text-anchor="middle" fill="#ccc" font-size="10" font-weight="bold">PLAY</text>
+          <text x="85" y="218" text-anchor="middle" fill="#ccc" font-size="10" font-weight="bold" font-family="Arial, sans-serif">REC</text>
+          <text x="85" y="232" text-anchor="middle" fill="#ccc" font-size="10" font-weight="bold" font-family="Arial, sans-serif">PLAY</text>
         </g>
         
       </svg>
@@ -1786,10 +1786,15 @@ class PunchLooper {
       // Don't drag if clicking on interactive elements
       if ((e.target as Element).closest('.knob-group, #footswitch, .pitch-button, .jog-button, .section-button, #reset-button, #hamburger-menu, #close-button')) return;
       
+      // Only allow dragging from the top control area (y: 10-30 in the SVG, scaled by guiScale)
+      const rect = gui.getBoundingClientRect();
+      const clickY = e.clientY - rect.top;
+      const scaledTopArea = 30 * this.settings.guiScale; // Top control area height scaled
+      if (clickY > scaledTopArea) return; // Only allow drag from top area
+      
       e.preventDefault();
       e.stopPropagation();
       isDraggingGUI = true;
-      const rect = gui.getBoundingClientRect();
       guiDragOffset.x = e.clientX - rect.left;
       guiDragOffset.y = e.clientY - rect.top;
       gui.style.cursor = 'grabbing';
