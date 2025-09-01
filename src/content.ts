@@ -613,13 +613,14 @@ class PunchLooper {
       }
       
       // Apply edge bleed to create overlap and eliminate gaps
-      // Edge bleed shortens the loop by moving B earlier and A later
+      // Edge bleed creates overlap by jumping back BEFORE reaching point B
+      // and jumping to BEFORE point A to create seamless transition
       const bleedSeconds = this.settings.edgeBleed / 1000;
       
-      // Move point B earlier (shortens the loop)
+      // Jump earlier (before reaching actual point B) to avoid gap
       const effectivePointB = this.state.pointB - bleedSeconds;
-      // Keep point A at original position (or slightly later for overlap)
-      const effectivePointA = this.state.pointA;
+      // Jump to slightly before point A to overlap the beginning
+      const effectivePointA = this.state.pointA - bleedSeconds;
       
       // Check if we've reached the effective loop end point
       const shouldLoop = currentTime >= effectivePointB;
@@ -627,7 +628,8 @@ class PunchLooper {
       if (shouldLoop) {
         console.log(`Loop boundary hit: ${currentTime.toFixed(3)} -> A (${effectivePointA.toFixed(3)})`);
         
-        // Apply latency compensation for more precise looping (negative latency moves forward)
+        // Apply latency compensation AND edge bleed for seamless loop
+        // Jump to before point A to create overlap
         const jumpTarget = effectivePointA - (this.settings.latencyCompensation / 1000);
         this.state.activeMedia.currentTime = Math.max(0, jumpTarget);
 
@@ -2122,22 +2124,22 @@ class PunchLooper {
         <!-- LEFT SIDE: LOOP Controls - Unified Professional Design -->
         <text x="60" y="160" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold" font-family="Arial, sans-serif">LOOP</text>
         
-        <!-- Half Loop Button -->
+        <!-- Half Loop Button (moved up 5px) -->
         <g id="half-loop" class="loop-button" data-action="half-loop" style="cursor: pointer;">
-          <rect x="15" y="175" width="22" height="18" rx="3" fill="#444" stroke="#666" stroke-width="1"/>
-          <text x="26" y="186" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" font-family="Arial, sans-serif">½×</text>
+          <rect x="15" y="170" width="22" height="18" rx="3" fill="#444" stroke="#666" stroke-width="1"/>
+          <text x="26" y="181" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" font-family="Arial, sans-serif">½×</text>
         </g>
         
-        <!-- Double Loop Button -->
+        <!-- Double Loop Button (moved up 5px) -->
         <g id="double-loop" class="loop-button" data-action="double-loop" style="cursor: pointer;">
-          <rect x="43" y="175" width="22" height="18" rx="3" fill="#444" stroke="#666" stroke-width="1"/>
-          <text x="54" y="186" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" font-family="Arial, sans-serif">2×</text>
+          <rect x="43" y="170" width="22" height="18" rx="3" fill="#444" stroke="#666" stroke-width="1"/>
+          <text x="54" y="181" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" font-family="Arial, sans-serif">2×</text>
         </g>
         
-        <!-- Quantize Button -->
+        <!-- Quantize Button (moved up 5px) -->
         <g id="quantize-loop" class="loop-button" data-action="quantize-loop" style="cursor: pointer;">
-          <rect x="71" y="175" width="32" height="18" rx="3" fill="#0a4a0a" stroke="#0f0" stroke-width="1"/>
-          <text x="87" y="186" text-anchor="middle" fill="#0f0" font-size="10" font-weight="bold" font-family="Arial, sans-serif">QNTZ</text>
+          <rect x="71" y="170" width="32" height="18" rx="3" fill="#0a4a0a" stroke="#0f0" stroke-width="1"/>
+          <text x="87" y="181" text-anchor="middle" fill="#0f0" font-size="10" font-weight="bold" font-family="Arial, sans-serif">QNTZ</text>
         </g>
         
         <!-- Tap Tempo button - small round button same level as RESET -->
@@ -2152,15 +2154,15 @@ class PunchLooper {
         
         <!-- RIGHT COLUMN: UNIFIED BUTTON GRID - Compact Professional Layout -->
         
-        <!-- SHIFT Controls (moved up to align with loop buttons at y=175) -->
-        <text x="145" y="170" text-anchor="middle" fill="#fff" font-size="7" font-weight="bold" font-family="Arial, sans-serif">SHIFT</text>
+        <!-- SHIFT Controls (moved up to align with loop buttons at y=170) -->
+        <text x="145" y="165" text-anchor="middle" fill="#fff" font-size="7" font-weight="bold" font-family="Arial, sans-serif">SHIFT</text>
         <g id="section-back" class="control-button" data-action="section-back" style="cursor: pointer;">
-          <rect x="125" y="175" width="20" height="16" rx="3" fill="#444" stroke="#666" stroke-width="1"/>
-          <text x="135" y="185" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" font-family="Arial, sans-serif">◀</text>
+          <rect x="125" y="170" width="20" height="16" rx="3" fill="#444" stroke="#666" stroke-width="1"/>
+          <text x="135" y="180" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" font-family="Arial, sans-serif">◀</text>
         </g>
         <g id="section-forward" class="control-button" data-action="section-forward" style="cursor: pointer;">
-          <rect x="155" y="175" width="20" height="16" rx="3" fill="#444" stroke="#666" stroke-width="1"/>
-          <text x="165" y="185" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" font-family="Arial, sans-serif">▶</text>
+          <rect x="155" y="170" width="20" height="16" rx="3" fill="#444" stroke="#666" stroke-width="1"/>
+          <text x="165" y="180" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" font-family="Arial, sans-serif">▶</text>
         </g>
         
         <!-- Main Footswitch - Professional Full-Width Design -->
@@ -2283,13 +2285,14 @@ class PunchLooper {
       });
     }
 
-    // Close button event listener (integrated)
+    // Close button event listener - completely destroy extension
     const closeButton = gui.querySelector('#close-button');
     if (closeButton) {
       closeButton.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        this.toggleGUI();
+        // Completely destroy the extension when X is clicked
+        this.destroy();
       });
     }
 
@@ -2329,7 +2332,7 @@ class PunchLooper {
       isDraggingGUI = true;
       guiDragOffset.x = e.clientX - rect.left;
       guiDragOffset.y = e.clientY - rect.top;
-      gui.style.cursor = 'grabbing';
+      // Don't change cursor on GUI element itself
       
       // Add event listeners only when dragging starts
       document.addEventListener('mousemove', guiMouseMove);
@@ -2357,6 +2360,15 @@ class PunchLooper {
       this.state.guiElement.style.opacity = '0';
       this.state.guiElement.style.transform = 'scale(0.9) translateY(20px)';
       this.state.guiElement.style.pointerEvents = 'none';
+      // Clean up any cursor states
+      document.body.style.cursor = '';
+      // Reset any dragging states
+      this.state.isDraggingKnob = null;
+      // Clean up any knob cursors
+      const knobs = this.state.guiElement.querySelectorAll('.knob');
+      knobs.forEach(k => {
+        (k as HTMLElement).style.cursor = 'pointer';
+      });
       this.showHUD('Guitar pedal GUI hidden', 700);
     }
   }
@@ -2500,7 +2512,10 @@ class PunchLooper {
     if (!param) return;
     
     this.state.isDraggingKnob = param;
-    document.body.style.cursor = 'grabbing';
+    // Don't modify body cursor - only change cursor on the knob itself
+    if (knob) {
+      (knob as HTMLElement).style.cursor = 'grabbing';
+    }
   }
 
   private handleKnobDrag(e: MouseEvent): void {
@@ -2523,7 +2538,15 @@ class PunchLooper {
   }
 
   private endKnobDrag(): void {
+    // Reset cursor on all knobs
+    if (this.state.guiElement) {
+      const knobs = this.state.guiElement.querySelectorAll('.knob');
+      knobs.forEach(k => {
+        (k as HTMLElement).style.cursor = 'pointer';
+      });
+    }
     this.state.isDraggingKnob = null;
+    // Clean up any body cursor changes that might have been applied
     document.body.style.cursor = '';
   }
 
@@ -2929,27 +2952,52 @@ class PunchLooper {
   }
 
   public destroy(): void {
+    // Stop all active processes
     this.stopLoop();
     this.cleanupAudioProcessing();
     
+    // Clean up any cursor changes
+    document.body.style.cursor = '';
+    document.body.style.removeProperty('cursor');
+    
+    // Reset all dragging states
+    this.state.isDraggingKnob = null;
+    
+    // Disconnect observers
     if (this.mutationObserver) {
       this.mutationObserver.disconnect();
+      this.mutationObserver = null;
     }
 
+    // Remove all DOM elements
     if (this.state.hudElement) {
       this.state.hudElement.remove();
+      this.state.hudElement = null;
     }
 
     if (this.state.guiElement) {
       this.state.guiElement.remove();
+      this.state.guiElement = null;
     }
 
+    // Clear all timeouts
     if (this.state.hudTimeout) {
       clearTimeout(this.state.hudTimeout);
+      this.state.hudTimeout = null;
     }
 
+    // Remove all event listeners
     document.removeEventListener('keydown', this.handleKeyDown.bind(this));
     document.removeEventListener('keyup', this.handleKeyUp.bind(this));
+    
+    // Clear all state references
+    this.state.activeMedia = null;
+    this.state.isLooping = false;
+    this.state.pointA = null;
+    this.state.pointB = null;
+    
+    // Mark instance as destroyed
+    (this as any).destroyed = true;
   }
 }
 
@@ -2964,9 +3012,26 @@ if (document.readyState === 'loading') {
   looper = new PunchLooper();
 }
 
-// Cleanup on page unload
+// Cleanup on page unload or tab close
 window.addEventListener('beforeunload', () => {
   if (looper) {
     looper.destroy();
+    looper = null;
+  }
+});
+
+// Also cleanup on visibility change (tab switching)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && looper) {
+    // Clean up cursor states when tab is hidden
+    document.body.style.cursor = '';
+  }
+});
+
+// Cleanup on page hide (mobile/some browsers)
+window.addEventListener('pagehide', () => {
+  if (looper) {
+    looper.destroy();
+    looper = null;
   }
 });

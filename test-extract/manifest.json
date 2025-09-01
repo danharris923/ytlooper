@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YT Looper - HTML5 Audio/Video Loop Tool",
-  "description": "Loop sections of any video with musical pitch/speed control. Guitar pedal interface, metronome, and precision controls.",
+  "description": "Professional audio looping tool for HTML5 media. Tap to set loop points, adjust pitch/speed, metronome, and EQ. Perfect for musicians and content creators.",
   "version": "1.0.0",
   "permissions": ["storage", "scripting"],
   "host_permissions": ["<all_urls>"],

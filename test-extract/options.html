@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Punch Looper - Settings</title>
+  <link rel="icon" href="icons/icon-32.png" type="image/png">
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1><img src="icons/icon-48.png" alt="Looper" style="width: 32px; height: 32px; vertical-align: middle; margin-right: 8px;">Punch Looper Settings</h1>
+      <p class="subtitle">Configure your looper pedal experience</p>
+    </header>
+
+    <main>
+      <form id="settingsForm">
+        <section class="setting-group">
+          <h2>Simple Controls</h2>
+          <p class="setting-help">Use [ to set point A, ] to set point B and start loop, \ to stop.</p>
+        </section>
+
+        <section class="setting-group">
+          <h2>Audio Engine</h2>
+          
+          <div class="setting">
+            <label for="latencyCompensation">Latency Compensation (ms)</label>
+            <input type="number" id="latencyCompensation" name="latencyCompensation" 
+                   min="-200" max="100" step="5">
+            <p class="setting-help">Pre-roll time to compensate for playback latency (negative = pre-grab)</p>
+          </div>
+
+          <div class="setting">
+            <label for="epsilon">Loop Edge Epsilon (ms)</label>
+            <input type="number" id="epsilon" name="epsilon" 
+                   min="1" max="50" step="1">
+            <p class="setting-help">Precision threshold for loop edge detection</p>
+          </div>
+
+          <div class="setting">
+            <label for="edgeBleed">Edge Bleed (ms)</label>
+            <input type="number" id="edgeBleed" name="edgeBleed" 
+                   min="0" max="300" step="25">
+            <p class="setting-help">Overlap before A and after B for smoother loops</p>
+          </div>
+        </section>
+
+        <section class="setting-group">
+          <h2>Metronome</h2>
+          
+          <div class="setting">
+            <label for="metronomeEnabled">
+              <input type="checkbox" id="metronomeEnabled" name="metronomeEnabled">
+              Enable Metronome
+            </label>
+            <p class="setting-help">Play clicks during loop playback</p>
+          </div>
+
+          <div class="setting">
+            <label for="clicksPerLoop">Clicks Per Loop</label>
+            <input type="number" id="clicksPerLoop" name="clicksPerLoop" 
+                   min="1" max="64" step="1">
+            <p class="setting-help">Number of metronome clicks per loop cycle</p>
+          </div>
+        </section>
+
+        <section class="setting-group">
+          <h2>Loop Point Trim</h2>
+          <p class="setting-help">Fine-tune loop points with automatic offsets (positive = later, negative = earlier)</p>
+          
+          <div class="setting">
+            <label for="pointAPreTrim">Point A Pre-Trim (ms)</label>
+            <input type="number" id="pointAPreTrim" name="pointAPreTrim" 
+                   min="-500" max="500" step="25">
+            <p class="setting-help">Adjust point A timing before it's set</p>
+          </div>
+
+          <div class="setting">
+            <label for="pointAPostTrim">Point A Post-Trim (ms)</label>
+            <input type="number" id="pointAPostTrim" name="pointAPostTrim" 
+                   min="-500" max="500" step="25">
+            <p class="setting-help">Adjust point A timing after it's set</p>
+          </div>
+
+          <div class="setting">
+            <label for="pointBPreTrim">Point B Pre-Trim (ms)</label>
+            <input type="number" id="pointBPreTrim" name="pointBPreTrim" 
+                   min="-500" max="500" step="25">
+            <p class="setting-help">Adjust point B timing before it's set</p>
+          </div>
+
+          <div class="setting">
+            <label for="pointBPostTrim">Point B Post-Trim (ms)</label>
+            <input type="number" id="pointBPostTrim" name="pointBPostTrim" 
+                   min="-500" max="500" step="25">
+            <p class="setting-help">Default: 150ms back (fixes loop timing)</p>
+          </div>
+        </section>
+
+        <section class="setting-group">
+          <h2>Key Bindings</h2>
+          <p class="setting-help">Customize keyboard shortcuts. Use Shift+ for modified keys.</p>
+          
+          <div class="key-bindings">
+            <div class="setting">
+              <label for="setPointA">Set Point A:</label>
+              <input type="text" id="setPointA" name="setPointA" placeholder="BracketLeft">
+            </div>
+            
+            <div class="setting">
+              <label for="setPointB">Set Point B:</label>
+              <input type="text" id="setPointB" name="setPointB" placeholder="BracketRight">
+            </div>
+            
+            <div class="setting">
+              <label for="stopLoop">Stop Loop:</label>
+              <input type="text" id="stopLoop" name="stopLoop" placeholder="Backslash">
+            </div>
+            
+            <div class="setting">
+              <label for="speedUp">Speed Up (Shift+):</label>
+              <input type="text" id="speedUp" name="speedUp" placeholder="Equal">
+            </div>
+            
+            <div class="setting">
+              <label for="speedDown">Speed Down (Shift+):</label>
+              <input type="text" id="speedDown" name="speedDown" placeholder="Minus">
+            </div>
+            
+            <div class="setting">
+              <label for="pitchUp">Pitch Up (Shift+):</label>
+              <input type="text" id="pitchUp" name="pitchUp" placeholder="ArrowUp">
+            </div>
+            
+            <div class="setting">
+              <label for="pitchDown">Pitch Down (Shift+):</label>
+              <input type="text" id="pitchDown" name="pitchDown" placeholder="ArrowDown">
+            </div>
+            
+            <div class="setting">
+              <label for="resetPitch">Reset Pitch/Speed (Shift+):</label>
+              <input type="text" id="resetPitch" name="resetPitch" placeholder="KeyR">
+            </div>
+            
+            <div class="setting">
+              <label for="toggleMetronome">Toggle Metronome (Shift+):</label>
+              <input type="text" id="toggleMetronome" name="toggleMetronome" placeholder="KeyM">
+            </div>
+            
+            <div class="setting">
+              <label for="jogABack">Jog A Back (Shift+):</label>
+              <input type="text" id="jogABack" name="jogABack" placeholder="Comma">
+            </div>
+            
+            <div class="setting">
+              <label for="jogAForward">Jog A Forward (Shift+):</label>
+              <input type="text" id="jogAForward" name="jogAForward" placeholder="Period">
+            </div>
+            
+            <div class="setting">
+              <label for="jogBBack">Jog B Back (Shift+):</label>
+              <input type="text" id="jogBBack" name="jogBBack" placeholder="Semicolon">
+            </div>
+            
+            <div class="setting">
+              <label for="jogBForward">Jog B Forward (Shift+):</label>
+              <input type="text" id="jogBForward" name="jogBForward" placeholder="Quote">
+            </div>
+          </div>
+        </section>
+      </form>
+    </main>
+
+    <footer>
+      <div class="status" id="status"></div>
+      <div class="buttons">
+        <button type="button" id="resetBtn" class="btn-secondary">Reset to Defaults</button>
+        <button type="button" id="saveBtn" class="btn-primary">Save Settings</button>
+      </div>
+    </footer>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
