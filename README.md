@@ -16,6 +16,8 @@ A Chrome extension that adds A/B looping functionality to HTML5 video and audio 
 - **Low CPU Usage**: Efficient `requestAnimationFrame` loop engine
 - **Built-in Metronome**: Helps with timing and rhythm practice
 - **Fine Control**: Precise 0.1 semitone pitch adjustments
+- **Loop Doubling/Halving**: Instantly double or half your loop length
+- **Smart Quantization**: Auto-detects BPM and snaps loops to perfect beats
 - **Boss RC-Style GUI**: Authentic guitar pedal interface with mouse control
 - **Interactive Knobs**: Drag to adjust pitch, speed, and volume
 - **LED Status Indicators**: Visual feedback for A/B points and loop state
@@ -40,6 +42,11 @@ A Chrome extension that adds A/B looping functionality to HTML5 video and audio 
 - **`]`** - Set point B (punch out) and start looping  
 - **`\`** - Stop loop
 
+#### Loop Manipulation (NEW! 🎯)
+- **`Shift + D`** - Double loop length (2×)
+- **`Shift + H`** - Half loop length (½×)
+- **`Shift + Q`** - Quantize loop to nearest beat (auto-detects BPM)
+
 #### Audio Control (NEW! 🎛️)
 - **`Shift + =`** - Increase playback speed
 - **`Shift + -`** - Decrease playback speed
@@ -50,11 +57,11 @@ A Chrome extension that adds A/B looping functionality to HTML5 video and audio 
 - **`Shift + R`** - Reset pitch and speed to normal
 - **`Shift + E`** - Toggle high-quality audio engine
 
-#### Loop Edge Adjustment
-- **`Shift + <`** - Move point A backward
-- **`Shift + >`** - Move point A forward
-- **`Shift + :`** - Move point B backward
-- **`Shift + "`** - Move point B forward
+#### Loop Edge Adjustment (Legacy - use loop manipulation instead)
+- **`Shift + <`** - Move point A backward (manual jog)
+- **`Shift + >`** - Move point A forward (manual jog)
+- **`Shift + :`** - Move point B backward (manual jog)
+- **`Shift + "`** - Move point B forward (manual jog)
 
 #### Metronome
 - **`Shift + M`** - Toggle metronome
@@ -76,6 +83,8 @@ A Chrome extension that adds A/B looping functionality to HTML5 video and audio 
 **Guitar Pedal GUI (Mouse Control)**
 1. Click the extension icon in the toolbar OR press `Shift + G` to show the pedal interface
 2. Click the large square footswitch to set A, then B, then start looping
+3. Use the **½×** and **2×** buttons to quickly resize your loop
+4. Click **QNTZ** to snap your loop to the nearest musical beat
 3. Drag the **PITCH** knob to adjust pitch (maintains speed)
 4. Drag the **TEMPO** knob to adjust speed (maintains pitch)  
 5. Drag the **LEVEL** knob to control volume
@@ -189,6 +198,14 @@ The build process:
 2. Bundles with Vite/Rollup
 3. Copies static assets
 4. Outputs to `dist/` ready for Chrome
+
+## Support YT Looper
+
+If you find YT Looper useful for your music practice or video editing, consider supporting its development:
+
+💖 **[Donate via Stripe](https://buy.stripe.com/00w9AT4q30dtby3aqtdIA04)** - Help keep the project free and fund new features!
+
+Your support helps maintain the extension and add new features requested by the community.
 
 ## Contributing
 

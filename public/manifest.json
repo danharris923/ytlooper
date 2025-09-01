@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "YT Looper",
-  "description": "Tap in, tap out, and loop any HTML5 audio/video instantly.",
+  "name": "YT Looper - HTML5 Audio/Video Loop Tool",
+  "description": "Professional audio looping tool for HTML5 media. Tap to set loop points, adjust pitch/speed, metronome, and EQ. Perfect for musicians and content creators.",
   "version": "1.0.0",
   "permissions": ["storage", "scripting"],
   "host_permissions": ["<all_urls>"],
@@ -22,12 +22,6 @@
       "matches": ["<all_urls>"],
       "js": ["content.js"],
       "run_at": "document_idle"
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["lib/soundtouch.min.js"],
-      "matches": ["<all_urls>"]
     }
   ],
   "options_page": "options.html",

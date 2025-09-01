@@ -1,3 +1,6 @@
+import { PedalTheme, getTheme, themes } from './themes';
+import { BeatDetector } from './beatDetector';
+
 interface LooperSettings {
   looperKey: string;
   latencyCompensation: number;
@@ -12,7 +15,11 @@ interface LooperSettings {
   pointBPostTrim: number;
   jogAdjustmentMs: number;
   guiScale: number;
-  experimentalPitch: boolean;
+  theme: string; // Theme ID
+  referencePitch: number; // A440 reference
+  beatDetectionSensitivity: number; // 0.1 to 2.0
+  enableBeatDetection: boolean;
+  quantizeMode: 'auto' | 'manual' | 'hybrid';
   keyBindings: {
     setPointA: string;
     setPointB: string;
@@ -27,6 +34,14 @@ interface LooperSettings {
     jogAForward: string;
     jogBBack: string;
     jogBForward: string;
+  };
+  enableExperimentalEQ: boolean; // Experimental EQ feature toggle
+  eq: {
+    low: number;      // 60Hz low shelf
+    lowMid: number;   // 250Hz peaking
+    mid: number;      // 1kHz peaking  
+    highMid: number;  // 4kHz peaking
+    high: number;     // 12kHz high shelf
   };
 }
 
@@ -44,6 +59,8 @@ interface LooperState {
   currentUrl: string;
   currentSemitoneShift: number;
   metronomeAudio: HTMLAudioElement | null;
+  metronomeBuffer: AudioBuffer | null;
+  metronomeContext: AudioContext | null;
   lastClickTime: number;
   guiElement: HTMLElement | null;
   isGuiVisible: boolean;
@@ -53,11 +70,21 @@ interface LooperState {
   currentSpeedMultiplier: number; // Independent speed control (0.25 to 4.0)
   basePitchRatio: number; // Base pitch ratio for calculations
   baseSpeedRatio: number; // Base speed ratio for calculations
+  // EQ filter nodes for Web Audio API
+  audioContext: AudioContext | null;
+  sourceNode: MediaElementAudioSourceNode | null;
+  eqFilters: {
+    low: BiquadFilterNode | null;      // 60Hz low shelf
+    lowMid: BiquadFilterNode | null;   // 250Hz peaking
+    mid: BiquadFilterNode | null;      // 1kHz peaking
+    highMid: BiquadFilterNode | null;  // 4kHz peaking
+    high: BiquadFilterNode | null;     // 12kHz high shelf
+  };
 }
 
 class PunchLooper {
   private settings: LooperSettings = {
-    looperKey: 'BracketLeft', // Legacy - not used anymore
+    looperKey: 'BracketLeft',
     latencyCompensation: 0,
     epsilon: 50,
     enableHoldToDefine: false,
@@ -70,7 +97,19 @@ class PunchLooper {
     pointBPostTrim: 100,
     jogAdjustmentMs: 50,
     guiScale: 1.0,
-    experimentalPitch: false,
+    theme: 'boss-rc1', // Default theme
+    referencePitch: 440, // Standard A440
+    beatDetectionSensitivity: 1.0, // Default sensitivity
+    enableBeatDetection: true,
+    quantizeMode: 'auto',
+    enableExperimentalEQ: false, // Disabled by default
+    eq: {
+      low: 0,      // 60Hz low shelf (-12 to +12 dB)
+      lowMid: 0,   // 250Hz peaking (-12 to +12 dB)
+      mid: 0,      // 1kHz peaking (-12 to +12 dB)  
+      highMid: 0,  // 4kHz peaking (-12 to +12 dB)
+      high: 0      // 12kHz high shelf (-12 to +12 dB)
+    },
     keyBindings: {
       setPointA: 'BracketLeft',
       setPointB: 'BracketRight', 
@@ -88,6 +127,9 @@ class PunchLooper {
     }
   };
 
+  private currentTheme: PedalTheme = getTheme('boss-rc1');
+  private beatDetector: BeatDetector = new BeatDetector();
+  
   private state: LooperState = {
     pointA: null,
     pointB: null,
@@ -102,6 +144,8 @@ class PunchLooper {
     currentUrl: window.location.href,
     currentSemitoneShift: 0,
     metronomeAudio: null,
+    metronomeBuffer: null,
+    metronomeContext: null,
     lastClickTime: 0,
     guiElement: null,
     isGuiVisible: false,
@@ -110,7 +154,21 @@ class PunchLooper {
     currentPitchShift: 0,
     currentSpeedMultiplier: 1.0,
     basePitchRatio: 1.0,
-    baseSpeedRatio: 1.0
+    baseSpeedRatio: 1.0,
+    // Quantize state
+    isQuantized: false,
+    originalPointA: null,
+    originalPointB: null,
+    // EQ filter nodes
+    audioContext: null,
+    sourceNode: null,
+    eqFilters: {
+      low: null,
+      lowMid: null,
+      mid: null,
+      highMid: null,
+      high: null
+    }
   };
 
   // Musical intervals - each step is a semitone
@@ -137,12 +195,6 @@ class PunchLooper {
   constructor() {
     this.init();
   }
-
-  // Removed SoundTouch injection - using native browser capabilities instead
-
-  // Removed complex audio context setup - using simple native controls
-
-  // Removed SoundTouch processor - using direct media element control
 
   private semitoneToRatio(semitones: number): number {
     // Convert semitone shift to frequency ratio
@@ -399,6 +451,24 @@ class PunchLooper {
       event.stopPropagation();
       event.stopImmediatePropagation();
       this.toggleGUI();
+    } else if (event.code === 'KeyD' && event.shiftKey) {
+      // Shift + D - double loop length
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      this.doubleLoopLength();
+    } else if (event.code === 'KeyH' && event.shiftKey) {
+      // Shift + H - half loop length
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      this.halfLoopLength();
+    } else if (event.code === 'KeyQ' && event.shiftKey) {
+      // Shift + Q - quantize loop
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      this.quantizeLoop();
     }
   }
 
@@ -428,10 +498,7 @@ class PunchLooper {
     return false;
   }
 
-  // Removed unused methods
-
   private setPointA(): void {
-    console.log('setPointA called, activeMedia:', !!this.state.activeMedia);
     if (!this.state.activeMedia) {
       this.showHUD('No media found', 1000);
       return;
@@ -442,7 +509,6 @@ class PunchLooper {
     adjustedTime = Math.max(0, adjustedTime); // Don't go negative
     
     this.state.pointA = adjustedTime;
-    console.log(`Set Point A at: ${this.state.pointA} (original: ${this.state.activeMedia.currentTime}, pre-trim: ${this.settings.pointAPreTrim}ms)`);
     const timeStr = this.formatTime(this.state.pointA);
     this.showHUD(`A @ ${timeStr}`, 700);
   }
@@ -459,7 +525,6 @@ class PunchLooper {
     adjustedTime = Math.max(0, adjustedTime);
     
     this.state.pointB = adjustedTime;
-    console.log(`Set Point B at: ${this.state.pointB} (original: ${this.state.activeMedia.currentTime}, pre-trim: ${this.settings.pointBPreTrim}ms, post-trim: ${this.settings.pointBPostTrim}ms)`);
     console.log('Loop length:', this.state.pointB - this.state.pointA, 'seconds');
     
     // Allow overlapping points for creative looping
@@ -506,6 +571,20 @@ class PunchLooper {
     this.stopLoop();
     this.state.pointA = null;
     this.state.pointB = null;
+    
+    // Clear quantize state when resetting
+    if (this.state.isQuantized) {
+      this.state.isQuantized = false;
+      this.state.originalPointA = null;
+      this.state.originalPointB = null;
+      
+      // Update quantize button appearance
+      const quantizeBtn = this.state.guiElement?.querySelector('#quantize-loop rect');
+      if (quantizeBtn) {
+        quantizeBtn.setAttribute('fill', '#0a4a0a'); // Dark green when off
+      }
+    }
+    
     this.updateGUILEDs();
   }
 
@@ -560,7 +639,6 @@ class PunchLooper {
           });
         }
         
-        console.log('Seek completed, new currentTime:', this.state.activeMedia.currentTime);
       }
 
       // Update GUI display
@@ -589,7 +667,6 @@ class PunchLooper {
     // Update display immediately
     this.updateDisplayText();
     
-    console.log(`[PunchLooper] Speed adjusted to ${this.state.currentSpeedMultiplier.toFixed(3)}x (pitch preserved)`);
     
     // Update speed knob rotation
     this.updateKnobRotation('speed');
@@ -613,16 +690,36 @@ class PunchLooper {
   private adjustPitch(semitones: number): void {
     if (!this.state.activeMedia) return;
 
-    // Update pitch shift value (clamp between -12 and +12 semitones)
-    this.state.currentPitchShift = Math.max(-12, Math.min(12, this.state.currentPitchShift + semitones));
+    // Update pitch shift value (clamp between -6 and +6 semitones for half-step precision)
+    this.state.currentPitchShift = Math.max(-6, Math.min(6, this.state.currentPitchShift + semitones));
     
     this.applyPitchShift();
+    
+    // Update pitch display
+    this.updatePitchDisplay();
     
     const pitchSign = this.state.currentPitchShift > 0 ? '+' : '';
     this.showParameterChange(`PITCH: ${pitchSign}${this.state.currentPitchShift} ST`);
     
     // Update display immediately
     this.updateDisplayText();
+  }
+  
+  private updatePitchDisplay(): void {
+    if (!this.state.guiElement) return;
+    
+    const pitchDisplay = this.state.guiElement.querySelector('#pitch-display');
+    if (pitchDisplay) {
+      const pitchValue = this.state.currentPitchShift;
+      if (pitchValue === 0) {
+        pitchDisplay.textContent = '0ST';
+        pitchDisplay.setAttribute('fill', '#888');
+      } else {
+        const sign = pitchValue > 0 ? '+' : '';
+        pitchDisplay.textContent = `${sign}${pitchValue}ST`;
+        pitchDisplay.setAttribute('fill', pitchValue > 0 ? '#0a0' : '#a00');
+      }
+    }
   }
 
   private adjustPitchSmooth(delta: number): void {
@@ -658,7 +755,6 @@ class PunchLooper {
     const pitchName = this.getPitchShiftName(this.state.currentPitchShift);
     this.showHUD(`Pitch: ${pitchName}`, 1000);
     
-    console.log(`[PunchLooper] Pitch: ${this.state.currentPitchShift} semitones, Speed: ${this.state.currentSpeedMultiplier}x, Combined: ${combinedRate.toFixed(3)}x`);
     
     // Update pitch knob rotation
     this.updateKnobRotation('pitch');
@@ -708,9 +804,11 @@ class PunchLooper {
     this.showHUD('Pitch and speed reset to original', 700);
     console.log('[PunchLooper] Playback settings reset to defaults');
     
-    // Update both knob positions to center (reset position)
+    // Update all displays
+    this.updatePitchDisplay();
     this.updateKnobRotation('pitch');
     this.updateKnobRotation('speed');
+    this.updateDisplayText();
     this.updateGUILEDs();
   }
 
@@ -729,11 +827,37 @@ class PunchLooper {
   }
 
   private initMetronome(): void {
-    if (this.state.metronomeAudio) return;
+    if (this.state.metronomeBuffer && this.state.metronomeContext) return;
 
-    // Create a simple click sound using Web Audio API
+    try {
+      // Create Web Audio API context
+      this.state.metronomeContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // Create metronome click buffer
+      const sampleRate = this.state.metronomeContext.sampleRate;
+      const duration = 0.05; // 50ms click
+      const length = sampleRate * duration;
+      const buffer = this.state.metronomeContext.createBuffer(1, length, sampleRate);
+      const data = buffer.getChannelData(0);
+
+      // Generate a sharp click sound
+      for (let i = 0; i < length; i++) {
+        const envelope = Math.exp(-i / (sampleRate * 0.01)); // Quick decay
+        const frequency = 1200; // Sharp click frequency
+        data[i] = Math.sin(2 * Math.PI * frequency * i / sampleRate) * envelope * 0.8;
+      }
+
+      this.state.metronomeBuffer = buffer;
+      console.log('[PunchLooper] Metronome initialized with Web Audio API');
+      return;
+      
+    } catch (error) {
+      console.warn('Failed to initialize Web Audio metronome, falling back to HTMLAudioElement:', error);
+    }
+
+    // Fallback to HTML Audio Element
     this.state.metronomeAudio = new Audio();
-    this.state.metronomeAudio.volume = 0.3;
+    this.state.metronomeAudio.volume = 0.5;
     
     // Create a simple beep sound as data URL
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -754,7 +878,8 @@ class PunchLooper {
   }
 
   private handleMetronomeClick(currentTime: number, loopLength: number): void {
-    if (!this.state.activeMedia || !this.state.metronomeAudio || 
+    if (!this.state.activeMedia || 
+        (!this.state.metronomeAudio && !this.state.metronomeBuffer) ||
         this.state.pointA === null || this.state.pointB === null) {
       return;
     }
@@ -779,6 +904,25 @@ class PunchLooper {
   }
 
   private playMetronomeClick(isDownbeat: boolean): void {
+    // Try Web Audio API first
+    if (this.state.metronomeContext && this.state.metronomeBuffer) {
+      try {
+        const source = this.state.metronomeContext.createBufferSource();
+        const gainNode = this.state.metronomeContext.createGain();
+        
+        source.buffer = this.state.metronomeBuffer;
+        gainNode.gain.value = isDownbeat ? 0.8 : 0.5; // Emphasize downbeat
+        
+        source.connect(gainNode);
+        gainNode.connect(this.state.metronomeContext.destination);
+        source.start(0);
+        return;
+      } catch (error) {
+        console.warn('Web Audio metronome click failed:', error);
+      }
+    }
+    
+    // Fallback to HTML Audio
     if (!this.state.metronomeAudio) return;
 
     try {
@@ -818,6 +962,114 @@ class PunchLooper {
       } else {
         this.showHUD('Point B out of bounds', 700);
       }
+    }
+  }
+
+  private doubleLoopLength(): void {
+    if (!this.state.activeMedia || this.state.pointA === null || this.state.pointB === null) {
+      this.showHUD('No loop set', 700);
+      return;
+    }
+
+    const currentLength = this.state.pointB - this.state.pointA;
+    const newPointB = this.state.pointA + (currentLength * 2);
+    const maxTime = this.state.activeMedia.duration || Number.MAX_SAFE_INTEGER;
+
+    if (newPointB <= maxTime) {
+      this.state.pointB = newPointB;
+      const lengthStr = this.formatTime(newPointB - this.state.pointA);
+      this.showHUD(`Loop 2x → ${lengthStr}`, 1000);
+      this.updateGUILEDs();
+    } else {
+      this.showHUD('Cannot double - exceeds media length', 700);
+    }
+  }
+
+  private halfLoopLength(): void {
+    if (!this.state.activeMedia || this.state.pointA === null || this.state.pointB === null) {
+      this.showHUD('No loop set', 700);
+      return;
+    }
+
+    const currentLength = this.state.pointB - this.state.pointA;
+    const minLoopLength = 0.1; // Minimum 100ms loop
+
+    if (currentLength / 2 >= minLoopLength) {
+      this.state.pointB = this.state.pointA + (currentLength / 2);
+      const lengthStr = this.formatTime(this.state.pointB - this.state.pointA);
+      this.showHUD(`Loop ½x → ${lengthStr}`, 1000);
+      this.updateGUILEDs();
+    } else {
+      this.showHUD('Cannot halve - loop too short', 700);
+    }
+  }
+
+  private quantizeLoop(): void {
+    if (!this.state.activeMedia || this.state.pointA === null || this.state.pointB === null) {
+      this.showHUD('No loop set', 700);
+      return;
+    }
+
+    // Toggle quantize OFF if already quantized
+    if (this.state.isQuantized) {
+      // Restore original loop points
+      if (this.state.originalPointA !== null && this.state.originalPointB !== null) {
+        this.state.pointA = this.state.originalPointA;
+        this.state.pointB = this.state.originalPointB;
+        
+        // Update active loop boundaries if currently looping
+        if (this.state.loopA !== null && this.state.loopB !== null) {
+          this.state.loopA = this.state.originalPointA;
+          this.state.loopB = this.state.originalPointB;
+        }
+      }
+      this.state.isQuantized = false;
+      this.state.originalPointA = null;
+      this.state.originalPointB = null;
+      
+      this.showHUD('Quantize OFF - Original loop restored', 1000);
+      
+      // Update button appearance
+      const quantizeBtn = this.state.guiElement?.querySelector('#quantize-loop rect');
+      if (quantizeBtn) {
+        quantizeBtn.setAttribute('fill', '#0a4a0a'); // Dark green when off
+      }
+      this.updateGUILEDs();
+      return;
+    }
+
+    // Save original points before quantizing
+    this.state.originalPointA = this.state.pointA;
+    this.state.originalPointB = this.state.pointB;
+
+    // Simple 0.1 second grid snap - just clean up timing boundaries
+    const gridSize = 0.1; // 100ms grid
+    
+    // Snap both points to clean 100ms boundaries
+    const snappedPointA = Math.round(this.state.pointA / gridSize) * gridSize;
+    const snappedPointB = Math.round(this.state.pointB / gridSize) * gridSize;
+    
+    // Ensure snapped points are valid
+    const maxTime = this.state.activeMedia.duration || Number.MAX_SAFE_INTEGER;
+    if (snappedPointB <= maxTime && snappedPointA >= 0 && snappedPointB > snappedPointA) {
+      // Update the boundary points - no audio processing, no loop restart
+      this.state.pointA = Math.max(0, snappedPointA);
+      this.state.pointB = Math.min(maxTime, snappedPointB);
+      this.state.isQuantized = true;
+      
+      this.showHUD('Quantized ON - Snapped to clean boundaries', 1200);
+      
+      // Update button appearance
+      const quantizeBtn = this.state.guiElement?.querySelector('#quantize-loop rect');
+      if (quantizeBtn) {
+        quantizeBtn.setAttribute('fill', '#0f0'); // Bright green when on
+      }
+      this.updateGUILEDs();
+    } else {
+      // Restore original points if quantization fails
+      this.state.originalPointA = null;
+      this.state.originalPointB = null;
+      this.showHUD('Cannot quantize - invalid boundaries', 700);
     }
   }
 
@@ -1054,6 +1306,11 @@ class PunchLooper {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
     `;
 
+    // Theme picker section
+    const themeOptions = Object.entries(themes).map(([id, theme]) => 
+      `<option value="${id}" ${this.settings.theme === id ? 'selected' : ''}>${theme.name}</option>`
+    ).join('');
+    
     modal.innerHTML = `
       <div id="modal-header" style="
         display: flex; 
@@ -1067,7 +1324,7 @@ class PunchLooper {
         cursor: move;
         user-select: none;
       ">
-        <h2 style="color: #ff3333; margin: 0; font-size: 20px;">YT Looper Settings</h2>
+        <h2 style="color: #ccc; margin: 0; font-size: 20px;">YT Looper Settings</h2>
         <button id="close-settings" style="
           background: none; 
           border: none; 
@@ -1077,8 +1334,28 @@ class PunchLooper {
           padding: 4px 8px;
           border-radius: 4px;
           transition: background-color 0.2s, color 0.2s;
-        " onmouseover="this.style.backgroundColor='#ff3333'; this.style.color='white';" 
+        " onmouseover="this.style.backgroundColor='#777'; this.style.color='white';" 
            onmouseout="this.style.backgroundColor='transparent'; this.style.color='#ccc';">&times;</button>
+      </div>
+      
+      <!-- Theme Selection -->
+      <div style="margin-bottom: 20px;">
+        <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500; color: #ccc;">Pedal Theme</label>
+        <select id="theme-select" style="
+          width: 100%;
+          padding: 10px;
+          background: #333;
+          border: 1px solid #555;
+          color: #fff;
+          border-radius: 6px;
+          font-size: 14px;
+          cursor: pointer;
+        ">
+          ${themeOptions}
+        </select>
+        <div style="margin-top: 8px; font-size: 11px; color: #888;">
+          Choose from classic pedal designs: Boss, Strymon, Empress, EHX, TC Ditto
+        </div>
       </div>
       
       <div style="margin-bottom: 16px;">
@@ -1114,18 +1391,86 @@ class PunchLooper {
 
       <div style="margin-bottom: 16px;">
         <label style="display: flex; align-items: center; gap: 8px; color: #ccc; font-size: 14px; cursor: pointer;">
-          <input type="checkbox" id="experimental-pitch" ${this.settings.experimentalPitch ? 'checked' : ''} 
+          <input type="checkbox" id="experimental-eq-enabled" ${this.settings.enableExperimentalEQ ? 'checked' : ''} 
                  style="transform: scale(1.2);">
-          <span>Experimental Pitch Controls</span>
+          <span>Enable Experimental EQ</span>
         </label>
-        <p style="color: #999; font-size: 12px; margin: 8px 0 0 24px;">
-          Shows pitch adjustment controls in the GUI.<br>
-          <strong>Warning:</strong> May cause audio glitches on some videos.
+        <p style="color: #888; font-size: 12px; margin: 8px 0 0 28px; line-height: 1.4;">
+          ⚠️ Web Audio API based 5-band equalizer. May cause audio processing issues or button conflicts.
+        </p>
+      </div>
+
+      <div style="margin-bottom: 24px;">
+        <h3 style="color: #ccc; margin: 0 0 16px 0; font-size: 16px;">5-Band EQ</h3>
+        
+        <div style="display: flex; justify-content: space-evenly; gap: 8px; padding: 0 4px;">
+          <!-- Low Band (60Hz) -->
+          <div style="display: flex; flex-direction: column; align-items: center; width: 60px;">
+            <div style="color: #888; font-size: 9px; margin-bottom: 2px;">+12</div>
+            <input type="range" id="eq-low-slider" min="-12" max="12" value="${this.settings.eq.low}" step="0.5"
+                   orient="vertical" style="writing-mode: bt-lr; -webkit-appearance: slider-vertical; width: 16px; height: 100px; background: #333;">
+            <div style="color: #888; font-size: 9px; margin-top: 2px;">-12</div>
+            <div id="eq-low-value" style="color: #0f0; font-size: 10px; font-weight: bold; margin-top: 6px; min-height: 14px;">${this.settings.eq.low > 0 ? '+' : ''}${this.settings.eq.low}dB</div>
+            <div style="color: #ccc; font-size: 10px; font-weight: bold; margin-top: 4px; text-align: center; line-height: 1.1;">LOW<br><span style="font-size: 8px; color: #888;">60Hz</span></div>
+          </div>
+          
+          <!-- Low-Mid Band (250Hz) -->
+          <div style="display: flex; flex-direction: column; align-items: center; width: 60px;">
+            <div style="color: #888; font-size: 9px; margin-bottom: 2px;">+12</div>
+            <input type="range" id="eq-lowmid-slider" min="-12" max="12" value="${this.settings.eq.lowMid}" step="0.5"
+                   orient="vertical" style="writing-mode: bt-lr; -webkit-appearance: slider-vertical; width: 16px; height: 100px; background: #333;">
+            <div style="color: #888; font-size: 9px; margin-top: 2px;">-12</div>
+            <div id="eq-lowmid-value" style="color: #0f0; font-size: 10px; font-weight: bold; margin-top: 6px; min-height: 14px;">${this.settings.eq.lowMid > 0 ? '+' : ''}${this.settings.eq.lowMid}dB</div>
+            <div style="color: #ccc; font-size: 10px; font-weight: bold; margin-top: 4px; text-align: center; line-height: 1.1;">L-MID<br><span style="font-size: 8px; color: #888;">250Hz</span></div>
+          </div>
+          
+          <!-- Mid Band (1kHz) -->
+          <div style="display: flex; flex-direction: column; align-items: center; width: 60px;">
+            <div style="color: #888; font-size: 9px; margin-bottom: 2px;">+12</div>
+            <input type="range" id="eq-mid-slider" min="-12" max="12" value="${this.settings.eq.mid}" step="0.5"
+                   orient="vertical" style="writing-mode: bt-lr; -webkit-appearance: slider-vertical; width: 16px; height: 100px; background: #333;">
+            <div style="color: #888; font-size: 9px; margin-top: 2px;">-12</div>
+            <div id="eq-mid-value" style="color: #0f0; font-size: 10px; font-weight: bold; margin-top: 6px; min-height: 14px;">${this.settings.eq.mid > 0 ? '+' : ''}${this.settings.eq.mid}dB</div>
+            <div style="color: #ccc; font-size: 10px; font-weight: bold; margin-top: 4px; text-align: center; line-height: 1.1;">MID<br><span style="font-size: 8px; color: #888;">1kHz</span></div>
+          </div>
+          
+          <!-- High-Mid Band (4kHz) -->
+          <div style="display: flex; flex-direction: column; align-items: center; width: 60px;">
+            <div style="color: #888; font-size: 9px; margin-bottom: 2px;">+12</div>
+            <input type="range" id="eq-highmid-slider" min="-12" max="12" value="${this.settings.eq.highMid}" step="0.5"
+                   orient="vertical" style="writing-mode: bt-lr; -webkit-appearance: slider-vertical; width: 16px; height: 100px; background: #333;">
+            <div style="color: #888; font-size: 9px; margin-top: 2px;">-12</div>
+            <div id="eq-highmid-value" style="color: #0f0; font-size: 10px; font-weight: bold; margin-top: 6px; min-height: 14px;">${this.settings.eq.highMid > 0 ? '+' : ''}${this.settings.eq.highMid}dB</div>
+            <div style="color: #ccc; font-size: 10px; font-weight: bold; margin-top: 4px; text-align: center; line-height: 1.1;">H-MID<br><span style="font-size: 8px; color: #888;">4kHz</span></div>
+          </div>
+          
+          <!-- High Band (12kHz) -->
+          <div style="display: flex; flex-direction: column; align-items: center; width: 60px;">
+            <div style="color: #888; font-size: 9px; margin-bottom: 2px;">+12</div>
+            <input type="range" id="eq-high-slider" min="-12" max="12" value="${this.settings.eq.high}" step="0.5"
+                   orient="vertical" style="writing-mode: bt-lr; -webkit-appearance: slider-vertical; width: 16px; height: 100px; background: #333;">
+            <div style="color: #888; font-size: 9px; margin-top: 2px;">-12</div>
+            <div id="eq-high-value" style="color: #0f0; font-size: 10px; font-weight: bold; margin-top: 6px; min-height: 14px;">${this.settings.eq.high > 0 ? '+' : ''}${this.settings.eq.high}dB</div>
+            <div style="color: #ccc; font-size: 10px; font-weight: bold; margin-top: 4px; text-align: center; line-height: 1.1;">HIGH<br><span style="font-size: 8px; color: #888;">12kHz</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <h3 style="color: #ccc; margin: 0 0 12px 0; font-size: 16px;">Pitch Control</h3>
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+          <button id="pitch-down-modal" style="background: #444; color: #fff; border: 1px solid #666; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 14px;">▼ -1</button>
+          <span style="color: #ccc; font-size: 14px; min-width: 100px; text-align: center;" id="pitch-display-modal">Original (0)</span>
+          <button id="pitch-up-modal" style="background: #444; color: #fff; border: 1px solid #666; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 14px;">+1 ▲</button>
+          <button id="pitch-reset-modal" style="background: #666; color: #fff; border: 1px solid #888; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">Reset</button>
+        </div>
+        <p style="color: #888; font-size: 12px; margin: 0; line-height: 1.4;">
+          Adjust pitch in semitone steps. Range: -6 to +6 semitones.
         </p>
       </div>
 
       <div style="margin-bottom: 16px;">
-        <h3 style="color: #ff3333; margin: 0 0 12px 0; font-size: 16px;">Metronome</h3>
+        <h3 style="color: #ccc; margin: 0 0 12px 0; font-size: 16px;">Metronome</h3>
         <label style="display: flex; align-items: center; gap: 8px; color: #ccc; font-size: 14px; cursor: pointer; margin-bottom: 12px;">
           <input type="checkbox" id="metronome-enabled" ${this.settings.metronomeEnabled ? 'checked' : ''} 
                  style="transform: scale(1.2);">
@@ -1146,7 +1491,7 @@ class PunchLooper {
       </div>
 
       <div style="margin-bottom: 20px;">
-        <h3 style="color: #ff3333; margin: 0 0 12px 0; font-size: 16px;">Keyboard Shortcuts</h3>
+        <h3 style="color: #ccc; margin: 0 0 12px 0; font-size: 16px;">Keyboard Shortcuts</h3>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
           <div style="display: flex; justify-content: space-between; color: #ccc;">
             <span>Set Point A:</span>
@@ -1209,14 +1554,52 @@ class PunchLooper {
         </div>
       </div>
 
+      <!-- Support Section -->
+      <div style="margin-top: 20px; padding: 16px; background: #1a1a1a; border-radius: 8px; border: 1px solid #333;">
+        <h3 style="color: #fff; margin: 0 0 12px 0; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+          ❤️ Support YT Looper
+        </h3>
+        <p style="color: #ccc; font-size: 13px; margin: 0 0 12px 0; line-height: 1.4;">
+          If you find YT Looper useful, consider supporting development to keep it free and add new features!
+        </p>
+        <a href="https://buy.stripe.com/00w9AT4q30dtby3aqtdIA04" target="_blank" rel="noopener" 
+           style="display: inline-block; padding: 8px 16px; background: linear-gradient(45deg, #635bff, #ff6b6b); 
+                  color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: bold;
+                  transition: opacity 0.2s;">
+          💖 Donate via Stripe
+        </a>
+      </div>
+
       <div style="display: flex; gap: 12px; margin-top: 24px;">
         <button id="reset-settings" style="flex: 1; padding: 10px; background: #444; color: white; border: none; border-radius: 6px; cursor: pointer;">Reset Defaults</button>
-        <button id="save-settings" style="flex: 1; padding: 10px; background: #ff3333; color: white; border: none; border-radius: 6px; cursor: pointer;">Save</button>
+        <button id="save-settings" style="flex: 1; padding: 10px; background: #666; color: white; border: none; border-radius: 6px; cursor: pointer;">Save</button>
       </div>
     `;
 
     backdrop.appendChild(modal);
     document.body.appendChild(backdrop);
+    
+    // Theme selector handler
+    const themeSelect = modal.querySelector('#theme-select') as HTMLSelectElement;
+    if (themeSelect) {
+      themeSelect.addEventListener('change', () => {
+        this.settings.theme = themeSelect.value;
+        this.currentTheme = getTheme(themeSelect.value);
+        
+        // Save theme preference
+        chrome.storage.sync.set({ theme: themeSelect.value });
+        
+        // Recreate GUI with new theme
+        if (this.state.guiElement) {
+          const wasVisible = this.state.isGuiVisible;
+          document.body.removeChild(this.state.guiElement);
+          this.createGUI();
+          if (wasVisible) {
+            this.toggleGUI();
+          }
+        }
+      });
+    }
 
     // Add event listeners
     const latencySlider = modal.querySelector('#latency-slider') as HTMLInputElement;
@@ -1225,10 +1608,52 @@ class PunchLooper {
     const bleedValue = modal.querySelector('#bleed-value') as HTMLElement;
     const jogSlider = modal.querySelector('#jog-slider') as HTMLInputElement;
     const jogValue = modal.querySelector('#jog-value') as HTMLElement;
-    const experimentalPitchCheckbox = modal.querySelector('#experimental-pitch') as HTMLInputElement;
     const metronomeCheckbox = modal.querySelector('#metronome-enabled') as HTMLInputElement;
     const clicksSlider = modal.querySelector('#clicks-slider') as HTMLInputElement;
     const clicksValue = modal.querySelector('#clicks-value') as HTMLElement;
+    const experimentalEQCheckbox = modal.querySelector('#experimental-eq-enabled') as HTMLInputElement;
+    
+    // Pitch control elements
+    const pitchDownBtn = modal.querySelector('#pitch-down-modal') as HTMLButtonElement;
+    const pitchUpBtn = modal.querySelector('#pitch-up-modal') as HTMLButtonElement;
+    const pitchResetBtn = modal.querySelector('#pitch-reset-modal') as HTMLButtonElement;
+    const pitchDisplayModal = modal.querySelector('#pitch-display-modal') as HTMLElement;
+    
+    // Update pitch display initially
+    const updatePitchDisplay = () => {
+      const interval = this.getCurrentInterval();
+      const name = this.getCurrentIntervalName();
+      pitchDisplayModal.textContent = `${name} (${this.state.currentPitchShift > 0 ? '+' : ''}${this.state.currentPitchShift})`;
+    };
+    updatePitchDisplay();
+    
+    // Pitch button event listeners
+    pitchDownBtn.addEventListener('click', () => {
+      this.adjustPitch(-1);
+      updatePitchDisplay();
+    });
+    
+    pitchUpBtn.addEventListener('click', () => {
+      this.adjustPitch(1);
+      updatePitchDisplay();
+    });
+    
+    pitchResetBtn.addEventListener('click', () => {
+      this.resetPlaybackSettings();
+      updatePitchDisplay();
+    });
+    
+    // EQ sliders
+    const eqLowSlider = modal.querySelector('#eq-low-slider') as HTMLInputElement;
+    const eqLowValue = modal.querySelector('#eq-low-value') as HTMLElement;
+    const eqLowMidSlider = modal.querySelector('#eq-lowmid-slider') as HTMLInputElement;
+    const eqLowMidValue = modal.querySelector('#eq-lowmid-value') as HTMLElement;
+    const eqMidSlider = modal.querySelector('#eq-mid-slider') as HTMLInputElement;
+    const eqMidValue = modal.querySelector('#eq-mid-value') as HTMLElement;
+    const eqHighMidSlider = modal.querySelector('#eq-highmid-slider') as HTMLInputElement;
+    const eqHighMidValue = modal.querySelector('#eq-highmid-value') as HTMLElement;
+    const eqHighSlider = modal.querySelector('#eq-high-slider') as HTMLInputElement;
+    const eqHighValue = modal.querySelector('#eq-high-value') as HTMLElement;
 
     latencySlider.addEventListener('input', () => {
       const value = parseInt(latencySlider.value);
@@ -1263,6 +1688,37 @@ class PunchLooper {
 
     clicksSlider?.addEventListener('input', () => {
       clicksValue.textContent = `${clicksSlider.value}`;
+    });
+
+    // EQ slider event handlers
+    eqLowSlider?.addEventListener('input', () => {
+      const value = parseFloat(eqLowSlider.value);
+      eqLowValue.textContent = `${value > 0 ? '+' : ''}${value}dB`;
+      this.updateEQ();
+    });
+    
+    eqLowMidSlider?.addEventListener('input', () => {
+      const value = parseFloat(eqLowMidSlider.value);
+      eqLowMidValue.textContent = `${value > 0 ? '+' : ''}${value}dB`;
+      this.updateEQ();
+    });
+    
+    eqMidSlider?.addEventListener('input', () => {
+      const value = parseFloat(eqMidSlider.value);
+      eqMidValue.textContent = `${value > 0 ? '+' : ''}${value}dB`;
+      this.updateEQ();
+    });
+    
+    eqHighMidSlider?.addEventListener('input', () => {
+      const value = parseFloat(eqHighMidSlider.value);
+      eqHighMidValue.textContent = `${value > 0 ? '+' : ''}${value}dB`;
+      this.updateEQ();
+    });
+    
+    eqHighSlider?.addEventListener('input', () => {
+      const value = parseFloat(eqHighSlider.value);
+      eqHighValue.textContent = `${value > 0 ? '+' : ''}${value}dB`;
+      this.updateEQ();
     });
 
     // Close modal
@@ -1332,14 +1788,29 @@ class PunchLooper {
       latencySlider.value = '0';
       bleedSlider.value = '100';
       jogSlider.value = '10';
-      experimentalPitchCheckbox.checked = false;
       metronomeCheckbox.checked = false;
       clicksSlider.value = '4';
+      experimentalEQCheckbox.checked = false;
+      
+      // Reset EQ sliders
+      eqLowSlider.value = '0';
+      eqLowMidSlider.value = '0';
+      eqMidSlider.value = '0';
+      eqHighMidSlider.value = '0';
+      eqHighSlider.value = '0';
+      
       latencyValue.innerHTML = '0ms';
       latencyValue.style.color = '#fff';
       bleedValue.textContent = '100ms';
       jogValue.textContent = '10ms';
       clicksValue.textContent = '4';
+      
+      // Reset EQ value displays
+      eqLowValue.textContent = '0dB';
+      eqLowMidValue.textContent = '0dB';
+      eqMidValue.textContent = '0dB';
+      eqHighMidValue.textContent = '0dB';
+      eqHighValue.textContent = '0dB';
     });
 
     // Save settings
@@ -1347,18 +1818,28 @@ class PunchLooper {
       this.settings.latencyCompensation = parseInt(latencySlider.value);
       this.settings.edgeBleed = parseInt(bleedSlider.value);
       this.settings.jogAdjustmentMs = parseInt(jogSlider.value);
-      this.settings.experimentalPitch = experimentalPitchCheckbox.checked;
       this.settings.metronomeEnabled = metronomeCheckbox.checked;
       this.settings.clicksPerLoop = parseInt(clicksSlider.value);
+      this.settings.enableExperimentalEQ = experimentalEQCheckbox.checked;
+      
+      // Save EQ settings
+      this.settings.eq = {
+        low: parseFloat(eqLowSlider.value),
+        lowMid: parseFloat(eqLowMidSlider.value),
+        mid: parseFloat(eqMidSlider.value),
+        highMid: parseFloat(eqHighMidSlider.value),
+        high: parseFloat(eqHighSlider.value)
+      };
 
       try {
         await chrome.storage.sync.set({
           latencyCompensation: this.settings.latencyCompensation,
           edgeBleed: this.settings.edgeBleed,
           jogAdjustmentMs: this.settings.jogAdjustmentMs,
-          experimentalPitch: this.settings.experimentalPitch,
           metronomeEnabled: this.settings.metronomeEnabled,
-          clicksPerLoop: this.settings.clicksPerLoop
+          clicksPerLoop: this.settings.clicksPerLoop,
+          enableExperimentalEQ: this.settings.enableExperimentalEQ,
+          eq: this.settings.eq
         });
         this.showHUD('Settings saved!', 2000);
         
@@ -1397,12 +1878,8 @@ class PunchLooper {
   }
 
   private updatePitchControlsVisibility(): void {
-    if (!this.state.guiElement) return;
-    
-    const pitchControls = this.state.guiElement.querySelector('#pitch-controls');
-    if (pitchControls) {
-      (pitchControls as SVGElement).style.display = this.settings.experimentalPitch ? 'block' : 'none';
-    }
+    // Pitch controls are now always visible - no longer experimental
+    // This method kept for compatibility but does nothing
   }
 
   private hideHUD(): void {
@@ -1444,21 +1921,66 @@ class PunchLooper {
     document.body.appendChild(gui);
     this.state.guiElement = gui;
     
+    // Initialize displays
+    this.updatePitchDisplay();
+    
     // Update pitch controls visibility based on settings
     this.updatePitchControlsVisibility();
   }
 
   private createPedalSVG(): string {
-    return `
-      
-      <svg viewBox="0 0 170 280" xmlns="http://www.w3.org/2000/svg" style="width: 100%; height: 100%; filter: drop-shadow(0 12px 24px rgba(0,0,0,0.4));">
-        <!-- Boss RC-1 Style Compact Design -->
-        <defs>
-          <!-- Red pedal gradient -->
-          <linearGradient id="redPedal" x1="0%" y1="0%" x2="100%" y2="100%">
+    const theme = this.currentTheme;
+    
+    // Parse gradient colors from theme if it's a gradient
+    let bodyGradientStops = '';
+    if (theme.body.background.includes('gradient')) {
+      // Extract colors from gradient string for Boss RC-1: #ff3333, #dd2222, #aa1111
+      if (theme.name === 'Boss RC-1') {
+        bodyGradientStops = `
             <stop offset="0%" style="stop-color:#ff3333"/>
             <stop offset="50%" style="stop-color:#dd2222"/>
-            <stop offset="100%" style="stop-color:#aa1111"/>
+            <stop offset="100%" style="stop-color:#aa1111"/>`;
+      } else if (theme.name === 'Strymon Timeline') {
+        bodyGradientStops = `
+            <stop offset="0%" style="stop-color:#4a6fa5"/>
+            <stop offset="50%" style="stop-color:#3a5f95"/>
+            <stop offset="100%" style="stop-color:#2a4f85"/>`;
+      } else if (theme.name === 'Empress Echosystem') {
+        bodyGradientStops = `
+            <stop offset="0%" style="stop-color:#1a3a2e"/>
+            <stop offset="50%" style="stop-color:#0f2818"/>
+            <stop offset="100%" style="stop-color:#061408"/>`;
+      } else if (theme.name === 'TC Ditto') {
+        bodyGradientStops = `
+            <stop offset="0%" style="stop-color:#663399"/>
+            <stop offset="50%" style="stop-color:#552288"/>
+            <stop offset="100%" style="stop-color:#441177"/>`;
+      } else if (theme.name === 'EHX Style') {
+        bodyGradientStops = `
+            <stop offset="0%" style="stop-color:#c0c0c0"/>
+            <stop offset="50%" style="stop-color:#a0a0a0"/>
+            <stop offset="100%" style="stop-color:#808080"/>`;
+      } else {
+        // Default red for unknown themes
+        bodyGradientStops = `
+            <stop offset="0%" style="stop-color:#ff3333"/>
+            <stop offset="50%" style="stop-color:#dd2222"/>
+            <stop offset="100%" style="stop-color:#aa1111"/>`;
+      }
+    } else {
+      // Solid color
+      bodyGradientStops = `
+            <stop offset="0%" style="stop-color:${theme.body.background}"/>
+            <stop offset="100%" style="stop-color:${theme.body.background}"/>`;
+    }
+    
+    return `
+      
+      <svg viewBox="0 0 190 300" xmlns="http://www.w3.org/2000/svg" style="width: 100%; height: 100%; filter: drop-shadow(${theme.effects?.shadow || '0 12px 24px rgba(0,0,0,0.4)'});">
+        <!-- ${theme.brand} ${theme.model} Style -->
+        <defs>
+          <!-- Dynamic body gradient based on theme -->
+          <linearGradient id="bodyGradient" x1="0%" y1="0%" x2="100%" y2="100%">${bodyGradientStops}
           </linearGradient>
           <!-- Chrome knobs -->
           <radialGradient id="chromeKnob" cx="30%" cy="30%" r="70%">
@@ -1495,15 +2017,15 @@ class PunchLooper {
           </radialGradient>
         </defs>
         
-        <!-- Main pedal body - Red with round corners -->
-        <rect x="10" y="0" width="150" height="260" rx="8" ry="8" 
-              fill="url(#redPedal)" 
-              stroke="#990000" stroke-width="2"/>
+        <!-- Main pedal body with theme colors -->
+        <rect x="10" y="0" width="170" height="280" rx="${theme.body.borderRadius}" ry="${theme.body.borderRadius}" 
+              fill="${theme.body.background.includes('gradient') ? 'url(#bodyGradient)' : theme.body.background}" 
+              stroke="${theme.body.stroke}" stroke-width="${theme.body.strokeWidth}"/>
         
         <!-- Top control area integrated into pedal -->
-        <rect x="20" y="10" width="130" height="20" rx="4" ry="4" 
-              fill="#222" 
-              stroke="#555" stroke-width="1"/>
+        <rect x="20" y="10" width="150" height="20" rx="4" ry="4" 
+              fill="${theme.controlPanel.background}" 
+              stroke="${theme.controlPanel.stroke}" stroke-width="${theme.controlPanel.strokeWidth}"/>
         
         <!-- Hamburger menu (left) -->
         <g id="hamburger-menu" style="cursor: pointer;" class="hamburger-menu">
@@ -1515,43 +2037,35 @@ class PunchLooper {
         
         <!-- Close button (right) -->
         <g id="close-button" style="cursor: pointer;" class="close-button">
-          <circle cx="145" cy="18" r="6" fill="#444" stroke="#666" stroke-width="1"/>
-          <text x="145" y="21" text-anchor="middle" fill="#ccc" font-size="12" font-weight="bold" font-family="Arial, sans-serif">×</text>
+          <circle cx="165" cy="18" r="6" fill="#444" stroke="#666" stroke-width="1"/>
+          <text x="165" y="21" text-anchor="middle" fill="#ccc" font-size="12" font-weight="bold" font-family="Arial, sans-serif">×</text>
         </g>
               
         <!-- Main branding section -->
-        <rect x="20" y="35" width="130" height="40" rx="4" ry="4" 
+        <rect x="20" y="35" width="150" height="40" rx="4" ry="4" 
               fill="#111" 
               stroke="#333" stroke-width="1"/>
         
         <!-- Digital display inside black box - reorganized layout -->
-        <rect x="25" y="40" width="120" height="30" rx="2" ry="2" fill="#000" stroke="#00ff00" stroke-width="1"/>
+        <rect x="25" y="40" width="140" height="30" rx="2" ry="2" fill="${theme.display.background}" stroke="${theme.display.stroke}" stroke-width="${theme.display.strokeWidth}"/>
         
         <!-- A/B times stacked on left side -->
-        <text id="a-time-display" x="35" y="50" text-anchor="start" fill="#00ff00" font-size="9" font-family="Courier New, monospace" font-weight="bold">A:--:--</text>
-        <text id="b-time-display" x="35" y="62" text-anchor="start" fill="#00ff00" font-size="9" font-family="Courier New, monospace" font-weight="bold">B:--:--</text>
+        <text id="a-time-display" x="35" y="50" text-anchor="start" fill="${theme.display.textColor}" font-size="9" font-family="${theme.display.fontFamily}" font-weight="bold">A:--:--</text>
+        <text id="b-time-display" x="35" y="62" text-anchor="start" fill="${theme.display.textColor}" font-size="9" font-family="${theme.display.fontFamily}" font-weight="bold">B:--:--</text>
         
         <!-- Parameter info on far right -->
-        <text id="param-display" x="135" y="56" text-anchor="end" fill="#00aa00" font-size="8" font-family="Courier New, monospace">READY</text>
+        <text id="param-display" x="155" y="56" text-anchor="end" fill="${theme.display.textColorDim}" font-size="8" font-family="${theme.display.fontFamily}">READY</text>
         
-        <!-- Input jacks -->
-        <circle cx="30" cy="45" r="4" fill="#333" stroke="#666" stroke-width="1"/>
-        <circle cx="30" cy="45" r="2" fill="#000"/>
-        <text x="30" y="60" text-anchor="middle" fill="#888" font-size="7" font-family="Arial, sans-serif">IN 1</text>
         
-        <circle cx="140" cy="45" r="4" fill="#333" stroke="#666" stroke-width="1"/>
-        <circle cx="140" cy="45" r="2" fill="#000"/>
-        <text x="140" y="60" text-anchor="middle" fill="#888" font-size="7" font-family="Arial, sans-serif">IN 2</text>
+        <!-- Status LEDs horizontally below knobs - optimized spacing -->
+        <circle cx="30" cy="140" r="4" fill="${this.state.pointA ? 'url(#greenLED)' : '#002200'}" class="led-a" stroke="#333" stroke-width="1"/>
+        <text x="30" y="152" text-anchor="middle" fill="${theme.leds.labelColor}" font-size="8" font-weight="bold" font-family="${theme.text.labelFont}">A</text>
         
-        <!-- Status LEDs horizontally below knobs -->
-        <circle cx="30" cy="145" r="4" fill="${this.state.pointA ? 'url(#greenLED)' : '#002200'}" class="led-a" stroke="#333" stroke-width="1"/>
-        <text x="30" y="158" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold" font-family="Arial, sans-serif">A</text>
+        <circle cx="55" cy="140" r="4" fill="${this.state.pointB ? 'url(#greenLED)' : '#002200'}" class="led-b" stroke="#333" stroke-width="1"/>
+        <text x="55" y="152" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold" font-family="Arial, sans-serif">B</text>
         
-        <circle cx="60" cy="145" r="4" fill="${this.state.pointB ? 'url(#greenLED)' : '#002200'}" class="led-b" stroke="#333" stroke-width="1"/>
-        <text x="60" y="158" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold" font-family="Arial, sans-serif">B</text>
-        
-        <circle cx="90" cy="145" r="5" fill="${this.state.isLooping ? 'url(#amberLED)' : '#331100'}" class="led-loop" stroke="#333" stroke-width="1"/>
-        <text x="90" y="158" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold" font-family="Arial, sans-serif">LOOP</text>
+        <circle cx="80" cy="140" r="5" fill="${this.state.isLooping ? 'url(#amberLED)' : '#331100'}" class="led-loop" stroke="#333" stroke-width="1"/>
+        <text x="80" y="152" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold" font-family="Arial, sans-serif">LOOP</text>
         
         <!-- Two control knobs side by side on left - VOLUME and TEMPO only -->
         <!-- Volume knob -->
@@ -1572,38 +2086,26 @@ class PunchLooper {
         </g>
 
 
-        <!-- A jog buttons - right of knobs -->
-        <text x="130" y="85" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold" font-family="Arial, sans-serif">A POINT</text>
-        
-        <!-- A back button (left arrow) -->
-        <g id="point-a-back" class="jog-button" data-action="a-back" style="cursor: pointer;">
-          <rect x="108" y="89" width="20" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
-          <polygon points="113,95 118,92 118,98" fill="#ccc"/>
-          <text x="118" y="87" text-anchor="middle" fill="#aaa" font-size="8" font-family="Arial, sans-serif">&lt;</text>
+        <!-- Row 2: A POINT Controls (y=115 baseline) -->
+        <text x="145" y="110" text-anchor="middle" fill="#fff" font-size="7" font-weight="bold" font-family="Arial, sans-serif">A POINT</text>
+        <g id="point-a-back" class="control-button" data-action="a-back" style="cursor: pointer;">
+          <rect x="125" y="115" width="20" height="16" rx="3" fill="#444" stroke="#666" stroke-width="1"/>
+          <text x="135" y="125" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" font-family="Arial, sans-serif">◀</text>
+        </g>
+        <g id="point-a-forward" class="control-button" data-action="a-forward" style="cursor: pointer;">
+          <rect x="155" y="115" width="20" height="16" rx="3" fill="#444" stroke="#666" stroke-width="1"/>
+          <text x="165" y="125" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" font-family="Arial, sans-serif">▶</text>
         </g>
         
-        <!-- A forward button (right arrow) -->
-        <g id="point-a-forward" class="jog-button" data-action="a-forward" style="cursor: pointer;">
-          <rect x="130" y="89" width="20" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
-          <polygon points="145,95 140,92 140,98" fill="#ccc"/>
-          <text x="140" y="87" text-anchor="middle" fill="#aaa" font-size="8" font-family="Arial, sans-serif">&gt;</text>
+        <!-- Row 3: B POINT Controls (y=145 baseline) -->
+        <text x="145" y="140" text-anchor="middle" fill="#fff" font-size="7" font-weight="bold" font-family="Arial, sans-serif">B POINT</text>
+        <g id="point-b-back" class="control-button" data-action="b-back" style="cursor: pointer;">
+          <rect x="125" y="145" width="20" height="16" rx="3" fill="#444" stroke="#666" stroke-width="1"/>
+          <text x="135" y="155" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" font-family="Arial, sans-serif">◀</text>
         </g>
-        
-        <!-- B jog buttons - right of knobs -->
-        <text x="130" y="115" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold" font-family="Arial, sans-serif">B POINT</text>
-        
-        <!-- B back button (left arrow) -->
-        <g id="point-b-back" class="jog-button" data-action="b-back" style="cursor: pointer;">
-          <rect x="108" y="119" width="20" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
-          <polygon points="113,125 118,122 118,128" fill="#ccc"/>
-          <text x="118" y="117" text-anchor="middle" fill="#aaa" font-size="8" font-family="Arial, sans-serif">&lt;</text>
-        </g>
-        
-        <!-- B forward button (right arrow) -->
-        <g id="point-b-forward" class="jog-button" data-action="b-forward" style="cursor: pointer;">
-          <rect x="130" y="119" width="20" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
-          <polygon points="145,125 140,122 140,128" fill="#ccc"/>
-          <text x="140" y="117" text-anchor="middle" fill="#aaa" font-size="8" font-family="Arial, sans-serif">&gt;</text>
+        <g id="point-b-forward" class="control-button" data-action="b-forward" style="cursor: pointer;">
+          <rect x="155" y="145" width="20" height="16" rx="3" fill="#444" stroke="#666" stroke-width="1"/>
+          <text x="165" y="155" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" font-family="Arial, sans-serif">▶</text>
         </g>
         
         <!-- Reset button (above and between knobs) -->
@@ -1613,53 +2115,61 @@ class PunchLooper {
           <text x="60" y="97" text-anchor="middle" fill="#888" font-size="6" font-family="Arial, sans-serif">RST</text>
         </g>
         
-        <!-- Pitch controls - experimental feature, hidden by default -->
-        <g id="pitch-controls" style="display: ${this.settings.experimentalPitch ? 'block' : 'none'};">
-          <!-- Pitch down button -->
-          <g id="pitch-down" class="pitch-button" data-action="pitch-down" style="cursor: pointer;">
-            <rect x="20" y="165" width="18" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
-            <polygon points="29,174 26,169 32,169" fill="#ccc"/>
-          </g>
-          
-          <!-- Pitch up button -->
-          <g id="pitch-up" class="pitch-button" data-action="pitch-up" style="cursor: pointer;">
-            <rect x="40" y="165" width="18" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
-            <polygon points="49,168 46,173 52,173" fill="#ccc"/>
-          </g>
-          
-          <!-- Pitch label to the right - now white -->
-          <text x="62" y="172" text-anchor="start" fill="#fff" font-size="8" font-family="Arial, sans-serif">PITCH</text>
+        
+        <!-- Loop manipulation buttons - new modern controls -->
+        
+        <!-- Half loop button -->
+        <!-- LEFT SIDE: LOOP Controls - Unified Professional Design -->
+        <text x="60" y="160" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold" font-family="Arial, sans-serif">LOOP</text>
+        
+        <!-- Half Loop Button -->
+        <g id="half-loop" class="loop-button" data-action="half-loop" style="cursor: pointer;">
+          <rect x="15" y="175" width="22" height="18" rx="3" fill="#444" stroke="#666" stroke-width="1"/>
+          <text x="26" y="186" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" font-family="Arial, sans-serif">½×</text>
         </g>
         
-        <!-- Section shift buttons - keep on right side -->
-        <text x="130" y="145" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold" font-family="Arial, sans-serif">SECTION</text>
-        
-        <!-- Section back button (left) -->
-        <g id="section-back" class="section-button" data-action="section-back" style="cursor: pointer;">
-          <rect x="108" y="149" width="20" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
-          <polygon points="113,155 118,152 118,158" fill="#ccc"/>
-          <text x="118" y="156" text-anchor="middle" fill="#aaa" font-size="8" font-family="Arial, sans-serif">«</text>
+        <!-- Double Loop Button -->
+        <g id="double-loop" class="loop-button" data-action="double-loop" style="cursor: pointer;">
+          <rect x="43" y="175" width="22" height="18" rx="3" fill="#444" stroke="#666" stroke-width="1"/>
+          <text x="54" y="186" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" font-family="Arial, sans-serif">2×</text>
         </g>
         
-        <!-- Section forward button (right) -->
-        <g id="section-forward" class="section-button" data-action="section-forward" style="cursor: pointer;">
-          <rect x="130" y="149" width="20" height="12" rx="2" fill="#333" stroke="#555" stroke-width="1"/>
-          <polygon points="145,155 140,152 140,158" fill="#ccc"/>
-          <text x="140" y="156" text-anchor="middle" fill="#aaa" font-size="8" font-family="Arial, sans-serif">»</text>
+        <!-- Quantize Button -->
+        <g id="quantize-loop" class="loop-button" data-action="quantize-loop" style="cursor: pointer;">
+          <rect x="71" y="175" width="32" height="18" rx="3" fill="#0a4a0a" stroke="#0f0" stroke-width="1"/>
+          <text x="87" y="186" text-anchor="middle" fill="#0f0" font-size="10" font-weight="bold" font-family="Arial, sans-serif">QNTZ</text>
         </g>
         
-        <!-- Current settings display (moved to center) -->
-        <text x="85" y="170" text-anchor="middle" fill="#888" font-size="7" font-family="Arial, sans-serif">${this.getCurrentIntervalName()}</text>
+        <!-- Tap Tempo button - small round button same level as RESET -->
+        <g id="tap-tempo" class="tap-button" style="cursor: pointer;" data-action="tap-tempo">
+          <circle cx="100" cy="85" r="6" fill="#444" stroke="#666" stroke-width="1"/>
+          <text x="100" y="89" text-anchor="middle" fill="#ff0" font-size="7" font-weight="bold" font-family="Arial, sans-serif">T</text>
+          <text x="100" y="97" text-anchor="middle" fill="#888" font-size="5" font-family="Arial, sans-serif">TAP</text>
+        </g>
         
-        <!-- Large black full-width footswitch with REC/PLAY label -->
+        <!-- BPM Display - below TAP button -->
+        <text id="bpm-display" x="100" y="105" text-anchor="middle" fill="#888" font-size="6" font-family="${theme.display.fontFamily}">---BPM</text>
+        
+        <!-- RIGHT COLUMN: UNIFIED BUTTON GRID - Compact Professional Layout -->
+        
+        <!-- SHIFT Controls (moved up to align with loop buttons at y=175) -->
+        <text x="145" y="170" text-anchor="middle" fill="#fff" font-size="7" font-weight="bold" font-family="Arial, sans-serif">SHIFT</text>
+        <g id="section-back" class="control-button" data-action="section-back" style="cursor: pointer;">
+          <rect x="125" y="175" width="20" height="16" rx="3" fill="#444" stroke="#666" stroke-width="1"/>
+          <text x="135" y="185" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" font-family="Arial, sans-serif">◀</text>
+        </g>
+        <g id="section-forward" class="control-button" data-action="section-forward" style="cursor: pointer;">
+          <rect x="155" y="175" width="20" height="16" rx="3" fill="#444" stroke="#666" stroke-width="1"/>
+          <text x="165" y="185" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold" font-family="Arial, sans-serif">▶</text>
+        </g>
+        
+        <!-- Main Footswitch - Professional Full-Width Design -->
         <g id="footswitch" style="cursor: pointer;" class="footswitch">
-          <rect x="20" y="190" width="130" height="60" rx="4" ry="4" fill="#000" stroke="#333" stroke-width="2"/>
-          <rect x="25" y="195" width="120" height="50" rx="2" ry="2" fill="#111" stroke="#222" stroke-width="1"/>
-          <!-- Subtle texture on footswitch -->
-          <rect x="30" y="200" width="110" height="40" rx="2" ry="2" fill="#222"/>
-          <!-- REC/PLAY label on footswitch -->
-          <text x="85" y="218" text-anchor="middle" fill="#ccc" font-size="10" font-weight="bold" font-family="Arial, sans-serif">REC</text>
-          <text x="85" y="232" text-anchor="middle" fill="#ccc" font-size="10" font-weight="bold" font-family="Arial, sans-serif">PLAY</text>
+          <rect x="20" y="200" width="150" height="60" rx="4" ry="4" fill="#000" stroke="#333" stroke-width="2"/>
+          <rect x="25" y="205" width="140" height="50" rx="2" ry="2" fill="#111" stroke="#222" stroke-width="1"/>
+          <rect x="30" y="210" width="130" height="40" rx="2" ry="2" fill="#222"/>
+          <text x="95" y="228" text-anchor="middle" fill="#ccc" font-size="11" font-weight="bold" font-family="Arial, sans-serif">REC</text>
+          <text x="95" y="242" text-anchor="middle" fill="#ccc" font-size="11" font-weight="bold" font-family="Arial, sans-serif">PLAY</text>
         </g>
         
       </svg>
@@ -1694,48 +2204,70 @@ class PunchLooper {
       });
     }
 
-    // Pitch up/down buttons
-    const pitchButtons = gui.querySelectorAll('.pitch-button');
-    pitchButtons.forEach(button => {
+    // All control buttons (pitch, A/B points, section shift) - unified handler
+    const controlButtons = gui.querySelectorAll('.control-button');
+    console.log(`Found ${controlButtons.length} control buttons`);
+    controlButtons.forEach(button => {
       button.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
         const action = (button as SVGElement).getAttribute('data-action');
-        if (action === 'pitch-up') {
-          this.adjustPitch(1);
-        } else if (action === 'pitch-down') {
-          this.adjustPitch(-1);
+        console.log(`Control button clicked: ${action}`);
+        
+        if (!action) {
+          console.log('No action found on button');
+          return;
         }
-      });
-    });
-
-    // Jog buttons for loop edge adjustment
-    const jogButtons = gui.querySelectorAll('.jog-button');
-    jogButtons.forEach(button => {
-      button.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const action = (button as SVGElement).getAttribute('data-action');
-        if (action) {
+        
+        // A/B point jog controls
+        if (action === 'a-back' || action === 'a-forward' || 
+                 action === 'b-back' || action === 'b-forward') {
+          console.log(`Executing jog: ${action}`);
+          this.showHUD(`Jog: ${action}`, 500);
           this.handleJogButton(action);
         }
-      });
-    });
-
-    // Section buttons for shifting entire loop region
-    const sectionButtons = gui.querySelectorAll('.section-button');
-    sectionButtons.forEach(button => {
-      button.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const action = (button as SVGElement).getAttribute('data-action');
-        if (action === 'section-forward') {
+        // Section shift controls
+        else if (action === 'section-forward') {
+          console.log('Executing section-forward');
+          this.showHUD('Section →', 500);
           this.shiftLoopSection(1);
         } else if (action === 'section-back') {
+          console.log('Executing section-back');
+          this.showHUD('Section ←', 500);
           this.shiftLoopSection(-1);
         }
       });
     });
+
+    // Loop manipulation buttons (half, double, quantize)
+    const loopButtons = gui.querySelectorAll('.loop-button');
+    loopButtons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const action = (button as SVGElement).getAttribute('data-action');
+        if (action === 'half-loop') {
+          this.halfLoopLength();
+        } else if (action === 'double-loop') {
+          this.doubleLoopLength();
+        } else if (action === 'quantize-loop') {
+          this.quantizeLoop();
+          // Animate quantize button after successful quantization
+          setTimeout(() => this.animateButton(button as SVGElement, '#0a0'), 10);
+        }
+      });
+    });
+    
+    // Tap tempo button
+    const tapButton = gui.querySelector('#tap-tempo');
+    if (tapButton) {
+      tapButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.handleTapTempo();
+      });
+    }
+
 
     // Global mouse events for knob dragging
     document.addEventListener('mousemove', (e) => this.handleKnobDrag(e));
@@ -1784,7 +2316,7 @@ class PunchLooper {
 
     gui.addEventListener('mousedown', (e) => {
       // Don't drag if clicking on interactive elements
-      if ((e.target as Element).closest('.knob-group, #footswitch, .pitch-button, .jog-button, .section-button, #reset-button, #hamburger-menu, #close-button')) return;
+      if ((e.target as Element).closest('.knob-group, #footswitch, .control-button, .loop-button, .tap-button, #reset-button, #hamburger-menu, #close-button')) return;
       
       // Only allow dragging from the top control area (y: 10-30 in the SVG, scaled by guiScale)
       const rect = gui.getBoundingClientRect();
@@ -1835,6 +2367,32 @@ class PunchLooper {
       return;
     }
 
+    // Auto-disable quantize when footswitch is pressed
+    if (this.state.isQuantized) {
+      // Restore original loop points before footswitch action
+      if (this.state.originalPointA !== null && this.state.originalPointB !== null) {
+        this.state.pointA = this.state.originalPointA;
+        this.state.pointB = this.state.originalPointB;
+        
+        // Update active loop boundaries if currently looping
+        if (this.state.loopA !== null && this.state.loopB !== null) {
+          this.state.loopA = this.state.originalPointA;
+          this.state.loopB = this.state.originalPointB;
+        }
+      }
+      this.state.isQuantized = false;
+      this.state.originalPointA = null;
+      this.state.originalPointB = null;
+      
+      // Update button appearance
+      const quantizeBtn = this.state.guiElement?.querySelector('#quantize-loop rect');
+      if (quantizeBtn) {
+        quantizeBtn.setAttribute('fill', '#0a4a0a'); // Dark green when off
+      }
+      
+      this.showHUD('Quantize OFF - Auto-disabled by footswitch', 1000);
+    }
+
     const currentTime = Date.now();
     const timeSinceLastTap = currentTime - this.state.lastTapTime;
     this.state.lastTapTime = currentTime;
@@ -1863,14 +2421,16 @@ class PunchLooper {
   private updateGUILEDs(): void {
     if (!this.state.guiElement) return;
     
-    // Update LED colors
+    const theme = this.currentTheme;
+    
+    // Update LED colors based on theme
     const ledA = this.state.guiElement.querySelector('.led-a') as SVGCircleElement;
     const ledB = this.state.guiElement.querySelector('.led-b') as SVGCircleElement;
     const ledLoop = this.state.guiElement.querySelector('.led-loop') as SVGCircleElement;
 
-    if (ledA) ledA.setAttribute('fill', this.state.pointA ? 'url(#greenLED)' : '#002200');
-    if (ledB) ledB.setAttribute('fill', this.state.pointB ? 'url(#greenLED)' : '#002200');
-    if (ledLoop) ledLoop.setAttribute('fill', this.state.isLooping ? 'url(#amberLED)' : '#331100');
+    if (ledA) ledA.setAttribute('fill', this.state.pointA ? theme.leds.on.a : theme.leds.off.a);
+    if (ledB) ledB.setAttribute('fill', this.state.pointB ? theme.leds.on.b : theme.leds.off.b);
+    if (ledLoop) ledLoop.setAttribute('fill', this.state.isLooping ? theme.leds.on.loop : theme.leds.off.loop);
     
     // Update display text
     this.updateDisplayText();
@@ -1879,8 +2439,8 @@ class PunchLooper {
   private updateDisplayText(): void {
     if (!this.state.guiElement || !this.state.activeMedia) return;
     
-    const aPoint = this.state.pointA ? this.formatTimeShort(this.state.pointA) : '--:--';
-    const bPoint = this.state.pointB ? this.formatTimeShort(this.state.pointB) : '--:--';
+    const aPoint = this.state.pointA ? this.formatTimeShort(this.state.pointA) : '--:--.--';
+    const bPoint = this.state.pointB ? this.formatTimeShort(this.state.pointB) : '--:--.--';
     const pitchSign = this.state.currentPitchShift > 0 ? '+' : '';
     const pitchText = this.state.currentPitchShift !== 0 ? ` ${pitchSign}${this.state.currentPitchShift}ST` : '';
     const speedText = `${Math.round(this.state.currentSpeedMultiplier * 100)}%`;
@@ -1928,7 +2488,8 @@ class PunchLooper {
   private formatTimeShort(seconds: number): string {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    const hundredths = Math.floor((seconds % 1) * 100);
+    return `${mins}:${secs.toString().padStart(2, '0')}.${hundredths.toString().padStart(2, '0')}`;
   }
 
   private startKnobDrag(e: MouseEvent, knob: SVGElement): void {
@@ -2165,16 +2726,16 @@ class PunchLooper {
 
   private formatTime(seconds: number): string {
     const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toFixed(3).padStart(6, '0')}`;
+    const secs = Math.floor(seconds % 60);
+    const hundredths = Math.floor((seconds % 1) * 100);
+    return `${mins}:${secs.toString().padStart(2, '0')}.${hundredths.toString().padStart(2, '0')}`;
   }
 
   private formatTimeWithMs(seconds: number): string {
     const mins = Math.floor(seconds / 60);
-    const remainingSecs = seconds % 60;
-    const wholeSecs = Math.floor(remainingSecs);
-    const ms = Math.round((remainingSecs - wholeSecs) * 1000);
-    return `${mins}:${wholeSecs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+    const secs = Math.floor(seconds % 60);
+    const hundredths = Math.floor((seconds % 1) * 100);
+    return `${mins}:${secs.toString().padStart(2, '0')}.${hundredths.toString().padStart(2, '0')}`;
   }
 
   private getCurrentInterval() {
@@ -2204,20 +2765,168 @@ class PunchLooper {
     this.state.currentPitchShift = 0;
     this.state.currentSpeedMultiplier = 1.0;
     
-    this.showHUD('Native audio controls initialized', 800);
-    console.log('[PunchLooper] Native audio controls initialized');
+    // Set up EQ processing (only if experimental EQ is enabled)
+    if (this.settings.enableExperimentalEQ) {
+      this.setupEQ(this.state.activeMedia);
+    }
+    
+    this.showHUD('Audio controls and EQ initialized', 800);
+    console.log('[PunchLooper] Native audio controls and EQ initialized');
   }
 
   private cleanupAudioProcessing(): void {
+    // Clean up EQ connections
+    this.cleanupEQ();
+    
     // Reset media element to defaults when switching
     if (this.state.activeMedia) {
       this.state.activeMedia.playbackRate = 1.0;
       this.state.activeMedia.preservesPitch = true;
       console.log('[PunchLooper] Audio settings reset to defaults');
     }
+    
+    // Disconnect beat detector
+    if (this.beatDetector) {
+      this.beatDetector.disconnect();
+    }
+  }
+  
+  private handleTapTempo(): void {
+    this.showHUD('Tap!', 300);
+    
+    const bpm = this.beatDetector.tap();
+    
+    if (bpm > 0) {
+      // Update BPM display
+      const bpmDisplay = this.state.guiElement?.querySelector('#bpm-display');
+      if (bpmDisplay) {
+        bpmDisplay.textContent = `${Math.round(bpm)}BPM`;
+      }
+      
+      // Flash the tap button circle (not rect)
+      const tapButton = this.state.guiElement?.querySelector('#tap-tempo circle');
+      if (tapButton) {
+        tapButton.setAttribute('fill', '#666');
+        setTimeout(() => {
+          tapButton.setAttribute('fill', '#444');
+        }, 100);
+      }
+      
+      if (bpm > 40 && bpm < 200) {
+        this.showHUD(`Tap Tempo: ${Math.round(bpm)} BPM`, 500);
+      }
+    } else {
+      this.showHUD('Keep tapping to set tempo...', 800);
+    }
   }
 
-  // Removed createPitchShiftProcessor - using native browser capabilities
+  // EQ Setup and Processing Methods
+  private setupEQ(mediaElement: HTMLMediaElement): void {
+    try {
+      // Create or reuse AudioContext
+      if (!this.state.audioContext) {
+        this.state.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      
+      // Clean up existing connections
+      this.cleanupEQ();
+      
+      // Create source node from media element
+      this.state.sourceNode = this.state.audioContext.createMediaElementSource(mediaElement);
+      
+      // Create 5-band EQ filters
+      this.state.eqFilters.low = this.state.audioContext.createBiquadFilter();
+      this.state.eqFilters.lowMid = this.state.audioContext.createBiquadFilter();
+      this.state.eqFilters.mid = this.state.audioContext.createBiquadFilter();
+      this.state.eqFilters.highMid = this.state.audioContext.createBiquadFilter();
+      this.state.eqFilters.high = this.state.audioContext.createBiquadFilter();
+      
+      // Configure filter types and frequencies
+      // Low (60Hz) - Low shelf
+      this.state.eqFilters.low.type = 'lowshelf';
+      this.state.eqFilters.low.frequency.setValueAtTime(60, this.state.audioContext.currentTime);
+      
+      // Low-Mid (250Hz) - Peaking
+      this.state.eqFilters.lowMid.type = 'peaking';
+      this.state.eqFilters.lowMid.frequency.setValueAtTime(250, this.state.audioContext.currentTime);
+      this.state.eqFilters.lowMid.Q.setValueAtTime(1, this.state.audioContext.currentTime);
+      
+      // Mid (1kHz) - Peaking
+      this.state.eqFilters.mid.type = 'peaking';
+      this.state.eqFilters.mid.frequency.setValueAtTime(1000, this.state.audioContext.currentTime);
+      this.state.eqFilters.mid.Q.setValueAtTime(1, this.state.audioContext.currentTime);
+      
+      // High-Mid (4kHz) - Peaking
+      this.state.eqFilters.highMid.type = 'peaking';
+      this.state.eqFilters.highMid.frequency.setValueAtTime(4000, this.state.audioContext.currentTime);
+      this.state.eqFilters.highMid.Q.setValueAtTime(1, this.state.audioContext.currentTime);
+      
+      // High (12kHz) - High shelf
+      this.state.eqFilters.high.type = 'highshelf';
+      this.state.eqFilters.high.frequency.setValueAtTime(12000, this.state.audioContext.currentTime);
+      
+      // Connect the audio chain: source -> low -> lowMid -> mid -> highMid -> high -> destination
+      this.state.sourceNode.connect(this.state.eqFilters.low);
+      this.state.eqFilters.low.connect(this.state.eqFilters.lowMid);
+      this.state.eqFilters.lowMid.connect(this.state.eqFilters.mid);
+      this.state.eqFilters.mid.connect(this.state.eqFilters.highMid);
+      this.state.eqFilters.highMid.connect(this.state.eqFilters.high);
+      this.state.eqFilters.high.connect(this.state.audioContext.destination);
+      
+      // Apply current EQ settings
+      this.updateEQ();
+      
+    } catch (error) {
+      console.error('Failed to setup EQ:', error);
+    }
+  }
+  
+  private updateEQ(): void {
+    if (!this.state.audioContext || !this.state.eqFilters.low) return;
+    
+    const currentTime = this.state.audioContext.currentTime;
+    
+    try {
+      // Apply EQ settings with smooth transitions
+      this.state.eqFilters.low.gain.setValueAtTime(this.settings.eq.low, currentTime);
+      this.state.eqFilters.lowMid.gain.setValueAtTime(this.settings.eq.lowMid, currentTime);
+      this.state.eqFilters.mid.gain.setValueAtTime(this.settings.eq.mid, currentTime);
+      this.state.eqFilters.highMid.gain.setValueAtTime(this.settings.eq.highMid, currentTime);
+      this.state.eqFilters.high.gain.setValueAtTime(this.settings.eq.high, currentTime);
+    } catch (error) {
+      console.error('Failed to update EQ:', error);
+    }
+  }
+  
+  private cleanupEQ(): void {
+    if (this.state.sourceNode) {
+      try {
+        this.state.sourceNode.disconnect();
+      } catch (e) {
+        // Ignore disconnect errors
+      }
+      this.state.sourceNode = null;
+    }
+    
+    // Clean up EQ filter nodes
+    Object.values(this.state.eqFilters).forEach(filter => {
+      if (filter) {
+        try {
+          filter.disconnect();
+        } catch (e) {
+          // Ignore disconnect errors
+        }
+      }
+    });
+    
+    this.state.eqFilters = {
+      low: null,
+      lowMid: null,
+      mid: null,
+      highMid: null,
+      high: null
+    };
+  }
 
   public destroy(): void {
     this.stopLoop();
