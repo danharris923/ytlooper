@@ -1,6 +1,6 @@
 {
   "name": "ytlooper",
-  "version": "1.0.0",
+  "version": "2025.09.04.1409",
   "description": "Tap in, tap out, and loop any HTML5 audio/video instantly.",
   "type": "module",
   "scripts": {

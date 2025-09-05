@@ -80,6 +80,9 @@ interface LooperState {
     highMid: BiquadFilterNode | null;  // 4kHz peaking
     high: BiquadFilterNode | null;     // 12kHz high shelf
   };
+  // Event handler references for proper cleanup
+  knobDragHandler: ((e: MouseEvent) => void) | null;
+  knobMouseUpHandler: (() => void) | null;
 }
 
 class PunchLooper {
@@ -168,7 +171,10 @@ class PunchLooper {
       mid: null,
       highMid: null,
       high: null
-    }
+    },
+    // Initialize event handlers as null
+    knobDragHandler: null,
+    knobMouseUpHandler: null
   };
 
   // Musical intervals - each step is a semitone
@@ -1890,6 +1896,12 @@ class PunchLooper {
     const container = document.getElementById('punch-looper-hud-container');
     if (container) {
       container.style.opacity = '0';
+      setTimeout(() => {
+        if (container && container.parentNode) {
+          container.parentNode.removeChild(container);
+        }
+        this.state.hudElement = null;
+      }, 300);
     }
   }
 
@@ -2271,9 +2283,12 @@ class PunchLooper {
     }
 
 
-    // Global mouse events for knob dragging
-    document.addEventListener('mousemove', (e) => this.handleKnobDrag(e));
-    document.addEventListener('mouseup', () => this.endKnobDrag());
+    // Global mouse events for knob dragging - store references for proper cleanup
+    this.state.knobDragHandler = (e: MouseEvent) => this.handleKnobDrag(e);
+    this.state.knobMouseUpHandler = () => this.endKnobDrag();
+    
+    document.addEventListener('mousemove', this.state.knobDragHandler);
+    document.addEventListener('mouseup', this.state.knobMouseUpHandler);
 
     // Hamburger menu event listener (integrated)
     const hamburgerMenu = gui.querySelector('#hamburger-menu');
@@ -2969,7 +2984,30 @@ class PunchLooper {
       this.mutationObserver = null;
     }
 
-    // Remove all DOM elements
+    // Remove ALL DOM elements created by this extension
+    // Remove HUD container
+    const hudContainer = document.getElementById('punch-looper-hud-container');
+    if (hudContainer) {
+      hudContainer.remove();
+    }
+    
+    // Remove GUI element
+    const guiElement = document.getElementById('punch-looper-gui');
+    if (guiElement) {
+      guiElement.remove();
+    }
+    
+    // Remove settings modal if it exists
+    const settingsBackdrop = document.getElementById('punch-looper-settings-backdrop');
+    if (settingsBackdrop) {
+      settingsBackdrop.remove();
+    }
+    
+    // Remove any other elements we may have created
+    const allOurElements = document.querySelectorAll('[id^="punch-looper"]');
+    allOurElements.forEach(element => element.remove());
+
+    // Clear state references
     if (this.state.hudElement) {
       this.state.hudElement.remove();
       this.state.hudElement = null;
@@ -2990,6 +3028,16 @@ class PunchLooper {
     document.removeEventListener('keydown', this.handleKeyDown.bind(this));
     document.removeEventListener('keyup', this.handleKeyUp.bind(this));
     
+    // Remove global knob drag listeners that were causing persistent cursor artifacts
+    if (this.state.knobDragHandler) {
+      document.removeEventListener('mousemove', this.state.knobDragHandler);
+      this.state.knobDragHandler = null;
+    }
+    if (this.state.knobMouseUpHandler) {
+      document.removeEventListener('mouseup', this.state.knobMouseUpHandler);
+      this.state.knobMouseUpHandler = null;
+    }
+    
     // Clear all state references
     this.state.activeMedia = null;
     this.state.isLooping = false;
@@ -2998,6 +3046,8 @@ class PunchLooper {
     
     // Mark instance as destroyed
     (this as any).destroyed = true;
+    
+    console.log('[PunchLooper] Extension completely destroyed and cleaned up');
   }
 }
 
@@ -3035,3 +3085,27 @@ window.addEventListener('pagehide', () => {
     looper = null;
   }
 });
+
+// Additional cleanup for extension being disabled/uninstalled
+// Note: Commenting out runtime.connect as it was causing immediate crashes
+// The destroy() method and event listeners should be sufficient for cleanup
+
+// Periodic cleanup check (safety net)
+const cleanupInterval = setInterval(() => {
+  // Check if extension context is still valid
+  try {
+    chrome.runtime.getURL(''); // This will throw if extension is invalid
+  } catch (error) {
+    console.log('[PunchLooper] Extension context invalid, performing cleanup');
+    if (looper) {
+      looper.destroy();
+      looper = null;
+    }
+    
+    // Emergency cleanup
+    const allOurElements = document.querySelectorAll('[id^="punch-looper"]');
+    allOurElements.forEach(element => element.remove());
+    
+    clearInterval(cleanupInterval);
+  }
+}, 30000); // Check every 30 seconds
